@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Training Plan"/>
+<title>Complete Training Plan</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{background:#080808;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;overscroll-behavior:none;}
+  button{font-family:inherit;}
+  ::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState} = React;
+
+const C = {
+  bg:"#080808", card:"#111111",
+  border:"#1f1f1f", border2:"#2a2a2a",
+  push:"#f59e0b", pull:"#38bdf8", swim:"#34d399",
+  warn:"#f87171", note:"#d4c44a",
+  text:"#f0ede8", muted:"#6b7280", dim:"#3f3f46",
+  vid:"#a78bfa", core:"#fb923c",
+  wrist:"#f472b6", legs:"#86efac",
+  sat:"#34d399", wed:"#22d3ee",
+};
+
+// ─── VIDEO PLAYER ─────────────────────────────────────────────────────────────
+// vid.type === "github"  → direct <video> tag with GitHub asset URL
+// vid.url + vid.start    → YouTube iframe with &start= timestamp
+// vid.url only           → regular YouTube iframe
+
+function getYouTubeId(url) {
+  if (!url) return null;
+  if (url.includes("shorts/")) return url.split("shorts/")[1].split("?")[0];
+  const m = url.match(/[?&]v=([^&]+)/);
+  return m ? m[1] : null;
+}
+
+function vidKey(vid) {
+  if (!vid) return null;
+  if (vid.type === "github") return "gh:" + vid.url;
+  return "yt:" + (vid.url || "") + (vid.start || "");
+}
+
+function InlinePlayer({ vid, onClose }) {
+  if (!vid) return null;
+
+  // GitHub hosted video — plays via native <video> tag
+  if (vid.type === "github") {
+    return (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          <div style={{ color:C.vid, fontSize:11, fontWeight:700, lineHeight:1.3, flex:1, paddingRight:8 }}>{vid.label}</div>
+          <button onClick={onClose} style={{ background:"#2a2a2a", border:"none", color:C.muted, borderRadius:6, padding:"4px 10px", fontSize:12, cursor:"pointer" }}>✕</button>
+        </div>
+        <video
+          src={vid.url}
+          controls
+          autoPlay
+          playsInline
+          style={{ width:"100%", borderRadius:10, background:"#000", display:"block" }}
+        />
+      </div>
+    );
+  }
+
+  // YouTube (with optional start timestamp)
+  const id = getYouTubeId(vid.url);
+  if (!id) return null;
+  const startParam = vid.start ? `&start=${vid.start}` : "";
+  return (
+    <div style={{ marginTop:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <div style={{ color:C.vid, fontSize:11, fontWeight:700, lineHeight:1.3, flex:1, paddingRight:8 }}>{vid.label}</div>
+        <button onClick={onClose} style={{ background:"#2a2a2a", border:"none", color:C.muted, borderRadius:6, padding:"4px 10px", fontSize:12, cursor:"pointer" }}>✕</button>
+      </div>
+      <div style={{ position:"relative", width:"100%", paddingBottom:"56.25%", background:"#000", borderRadius:10, overflow:"hidden" }}>
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&playsinline=1${startParam}`}
+          title={vid.label}
+          allow="autoplay;fullscreen;encrypted-media;picture-in-picture"
+          allowFullScreen
+          style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }}
+        />
+      </div>
+      {vid.start && (
+        <div style={{ color:C.dim, fontSize:10, textAlign:"center", marginTop:6 }}>
+          Plays from {Math.floor(vid.start/60)}:{String(vid.start%60).padStart(2,"0")} — {vid.source}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlayButton({ vid, activeVid, setActiveVid }) {
+  if (!vid) return null;
+  const key = vidKey(vid);
+  const isPlaying = vidKey(activeVid) === key;
+  const subtitle = isPlaying ? "Tap to close"
+    : vid.type === "github" ? "Plays inline ▶"
+    : vid.start ? `${vid.source || "YouTube"} · from ${Math.floor(vid.start/60)}:${String(vid.start%60).padStart(2,"0")}`
+    : `${vid.source || "YouTube"} · plays here`;
+  return (
+    <div>
+      <button
+        onClick={() => setActiveVid(isPlaying ? null : vid)}
+        style={{ display:"flex", alignItems:"center", gap:10,
+          background: isPlaying ? C.vid+"25" : C.vid+"12",
+          border:`1px solid ${isPlaying ? C.vid+"70" : C.vid+"35"}`,
+          borderRadius:9, padding:"10px 13px", marginTop:10,
+          cursor:"pointer", width:"100%", textAlign:"left" }}
+      >
+        <div style={{ width:34, height:34, borderRadius:"50%", background:C.vid+"30",
+          border:`1px solid ${C.vid}60`, display:"flex", alignItems:"center",
+          justifyContent:"center", flexShrink:0 }}>
+          <span style={{ color:C.vid, fontSize:isPlaying?12:15, marginLeft:isPlaying?0:3 }}>
+            {isPlaying ? "■" : "▶"}
+          </span>
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ color:C.vid, fontSize:12, fontWeight:600, lineHeight:1.3 }}>
+            {isPlaying ? "Close player" : vid.label}
+          </div>
+          <div style={{ color:C.vid+"80", fontSize:10, marginTop:2 }}>{subtitle}</div>
+        </div>
+      </button>
+      {isPlaying && <InlinePlayer vid={vid} onClose={() => setActiveVid(null)} />}
+    </div>
+  );
+}
+
+// ─── RING HEIGHT VIDEO ────────────────────────────────────────────────────────
+const RING_HEIGHT_VIDEO = {
+  url:"https://www.youtube.com/watch?v=kN-yO7TShEw",
+  label:"Ring Setup & Height Guide — All Exercises",
+  source:"SaturnoMovement",
+  note:"Covers ring setup and correct height per exercise type. Watch before your first session.",
+};
+
+// ─── WARMUP STEPS ─────────────────────────────────────────────────────────────
+// Steps 1, 2, 5, 6 → GitHub Release asset URLs (stream via <video> tag, no local files needed)
+// Steps 3 & 4      → Same SaturnoMovement YouTube video at exact chapter timestamps
+// Step 2 has two options — pick ONE per session and alternate across the week
+
+const warmupSteps = [
+  {
+    n:"1", name:"Wrist Warm-up", dur:"~2 min",
+    note:"Non-negotiable for ring training — wrists take the most load. Full circles, flexion-extension, and wrist rocking in all directions before touching the rings.",
+    videos:[
+      { type:"github", url:"https://github.com/user-attachments/assets/36b358c5-1f3c-40fb-95f0-386f4f4db62a", label:"Wrist Warmup" },
+    ],
+  },
+  {
+    n:"2", name:"Floor & Wall  /  Band & Stick", dur:"~3 min",
+    note:"Pick ONE per session — both target thoracic mobility and open the chest and shoulders. Alternate between them across the week to cover slightly different ranges.",
+    videos:[
+      { type:"github", url:"https://github.com/user-attachments/assets/0609a027-3c21-4783-a779-14a083c1ba48", label:"Floor & Wall Warmup" },
+      { type:"github", url:"https://github.com/user-attachments/assets/8a1372c4-247f-48af-9ae3-fb44f0061e8b", label:"Band & Stick Warmup" },
+    ],
+  },
+  {
+    n:"3", name:"Scap Push-up Circles", dur:"2×4 reps each direction",
+    note:"Activates serratus anterior and scapular stabilisers. Arms locked straight — move ONLY through the shoulder blades. Full protraction and retraction every rep. Critical for shoulder health.",
+    videos:[
+      { url:"https://www.youtube.com/watch?v=xeJJEZdaMm8", start:69, label:"Scapula Push Up Circles — starts at 1:09", source:"SaturnoMovement" },
+    ],
+  },
+  {
+    n:"4", name:"Scap Row Circles", dur:"2×4 reps each direction",
+    note:"Warms up the pulling muscles and rear deltoids. Same SaturnoMovement video as Step 3 — the next chapter begins at 1:38. Use ring height that gives full scapular range with arms extended.",
+    videos:[
+      { url:"https://www.youtube.com/watch?v=xeJJEZdaMm8", start:98, label:"Scapula Row Circles — starts at 1:38", source:"SaturnoMovement" },
+    ],
+  },
+  {
+    n:"5", name:"General Ring Stretches", dur:"~2 min",
+    note:"Dynamic range-of-motion work with the rings — chest opener, lat stretch, shoulder rotation. Covers the full joint range you will be working through in the session.",
+    videos:[
+      { type:"github", url:"https://github.com/user-attachments/assets/e1fe2963-d87f-4ccb-80eb-d114e1895e4d", label:"General Ring Stretches" },
+    ],
+  },
+  {
+    n:"6", name:"German Hang", dur:"2×10–20s (gentle)",
+    note:"Gentle bicep tendon and shoulder conditioning. Start with feet on the floor or a very shallow hang. NEVER force the range. Progress over weeks.",
+    videos:[
+      { type:"github", url:"https://github.com/user-attachments/assets/1ac0ec06-124c-4a89-899d-fa0bb08ec78f", label:"German Hang" },
+    ],
+  },
+];
+
+const cooldownSteps = [
+  { name:"Shaking", dur:"2–3 min", note:"Shake out arms, legs, and whole body loosely to discharge muscular tension." },
+  { name:"Stillness & Breathing", dur:"3–5 min", note:"Body vibrations first, then slow deep breathing cycles to bring the nervous system down." },
+];
+
+const tempoGuide = [
+  { code:"30X1", desc:"3s lower → no pause → explosive up → 1s squeeze at top" },
+  { code:"20X0", desc:"2s lower → no pause → explosive up → no pause" },
+  { code:"40X0", desc:"4s lower → no pause → explosive up → no pause" },
+  { code:"30X2", desc:"3s lower → no pause → up → 2s hold at top" },
+  { code:"30X0", desc:"3s lower → no pause → explosive up → no pause" },
+  { code:"Isometric", desc:"Hold the contracted position for the stated number of seconds" },
+];
+
+const guidelines = [
+  { color:C.push, title:"Shift Structure", body:"No fixed weekdays. Work days: 5–10 min micro-dose only. Off days: the next session in the queue (Ring A, Ring B, Legs on day 1 of a 2+ day off run, swim on hometown visits) if you are Green or Yellow. Details in the Plan tab." },
+  { color:C.push, title:"2 Sets Per Exercise", body:"Always 2 working sets on rings. Focus entirely on quality, controlled tempo, and full range of motion. Never sacrifice form for reps." },
+  { color:C.push, title:"Session Duration", body:"Ring A/B: warm-up (10 min) + main work (~30 min) + cool-down (5 min) = ~45 min, plus 5 min wrist. Legs: ~65 min main day, ~35 min control day. Swim: ~30–55 min." },
+  { color:C.push, title:"Ring Rest Periods", body:"1:30 between most ring sets. 2:00 for pull-up and hanging movements. Use a timer — don't guess." },
+  { color:C.pull, title:"Track Everything", body:"Rings: record ring height, reps achieved, and felt difficulty. Swim: record stroke count per 20m every length. Legs: record weight, reps, and pistol level. Wrist: note when a hold starts feeling easy — that is when to progress." },
+  { color:C.pull, title:"Progression Rule (Rings)", body:"Hit the top of the rep range in both sets for 2 consecutive sessions → lower rings or move to Level 2 variation." },
+  { color:C.pull, title:"Phase Timeline", body:"Run Ring A/B for about 8 sessions (roughly 5–6 weeks), then deload for 2 sessions (1 set each, 60–70% effort), then progress. Swim advances one visit at a time. Legs and Wrist run year-round." },
+  { color:C.legs, title:"Leg Day Scheduling", body:"Leg soreness peaks 24–72 h after a session, and a 12-hour shift on your feet makes it costly. Legs go on day 1 of an off run of 2+ days, at most once per 7 days, and never the day before a shift. Start with half the sets for your first two leg days." },
+  { color:C.legs, title:"Leg Day Frequency", body:"Aim for 2–3 leg days a month (one in your work-base 3-day block). Add the optional control day only after 4+ weeks, on an off day that is not right before a shift." },
+  { color:C.wrist, title:"Wrist / Forearm Rules", body:"Add load or hold time ONLY when the minute starts feeling easy. Never push through joint pain — tendon irritation builds slowly. On ring deload week, wrist work stays the same — it is low enough load to run continuously." },
+  { color:C.swim, title:"Swim–Ring Scheduling", body:"Swimming happens on the hometown visit: Day 1 and Day 3 main sessions, Day 2 light (rest in Visit 1). If your shoulders feel tired, drop the Day 2 swim and any Ring work that day." },
+  { color:C.core, title:"Core Gap — Hollow Body", body:"Add 2×20–30s hollow body holds to any day. It mirrors your freestyle streamline and costs no meaningful recovery." },
+  { color:C.warn, title:"Shoulder Safety", body:"Always complete the full ring warm-up. Never skip the rear-delt move (Face Pull or Reverse Fly) or German Hang prep. If shoulder flares: swap Ring Dips for Ring Push-ups that session." },
+  { color:C.warn, title:"Soreness vs Pain", body:"DOMS (delayed soreness 24–48h) is normal. Sharp or joint pain during movement is not. Stop if you feel joint pain." },
+];
+
+// ─── WRIST VIDEOS ─────────────────────────────────────────────────────────────
+const WV = {
+  finger_curl: { url:"https://www.youtube.com/shorts/rlDrkmZt7lU", label:"Finger Flexion Wrist Curls", source:"YouTube" },
+  wrist_ext:   { url:"https://www.youtube.com/watch?v=ZQLMz8-KpgU", label:"Wrist Extension / Reverse Wrist Curl", source:"YouTube" },
+  dead_hang:   { url:"https://www.youtube.com/watch?v=2vspW4N4BMs", label:"Dead Hang Tutorial", source:"YouTube" },
+  pinch_hold:  { url:"https://www.youtube.com/watch?v=6aQdvuCNnUA", label:"Dumbbell Pinch Hold", source:"YouTube" },
+  hammer_curl: { url:"https://www.youtube.com/watch?v=dseBStmo7t0", label:"Thick-Handle Hammer Curls", source:"YouTube" },
+  ext_band:    { url:"https://www.youtube.com/watch?v=MEgMntLym84", label:"Extensor Band Finger Opens", source:"YouTube" },
+  towel_wring: { url:"https://www.youtube.com/watch?v=db6EEi_ZXhY", label:"John Brookfield — Towel Wring / Grip Method", source:"Grip Training" },
+};
+
+// ─── LEG VIDEOS ───────────────────────────────────────────────────────────────
+const LV = {
+  short_foot:  { url:"https://www.youtube.com/watch?v=QnnsoOIAFm0", label:"Short-Foot Hold (Arch Dome)", source:"Rehab Science" },
+  knee_wall:   { url:"https://www.youtube.com/watch?v=ElrpduJn92Y", label:"Knee-to-Wall Ankle Rocks", source:"YouTube" },
+  tib_raise:   { url:"https://www.youtube.com/watch?v=n6zRhIJm2-8", label:"Tibialis Raises", source:"YouTube" },
+  bw_split:    { url:"https://www.youtube.com/watch?v=vvZHaPGOIWU", label:"Bodyweight Split Squat", source:"YouTube" },
+  sl_balance:  { url:"https://www.youtube.com/watch?v=Dtgh2_LFkBQ", label:"Single-Leg Balance", source:"YouTube" },
+  rdl:         { url:"https://www.youtube.com/watch?v=ZEnWV4kguKc", label:"Romanian Deadlift (RDL)", source:"YouTube" },
+  rfess:       { url:"https://www.youtube.com/watch?v=Cs4yl17f14c", label:"Rear-Foot Elevated Split Squat (RFESS)", source:"YouTube" },
+  pistol:      { url:"https://www.youtube.com/watch?v=rT_2QHROltE", label:"Box / Counterbalance Pistol Squat Progression", source:"Squat University" },
+  sl_calf:     { url:"https://www.youtube.com/watch?v=qPd73snQfUs", label:"Single-Leg Calf Raise", source:"YouTube" },
+  ham_slider:  { url:"https://www.youtube.com/watch?v=qby11kFGn2g", label:"Hamstring Slider Curl", source:"YouTube" },
+  hip_abd:     { url:"https://www.youtube.com/watch?v=UmmBtOG2N_s", label:"Side-Lying Hip Abduction", source:"YouTube" },
+  lat_walk:    { url:"https://www.youtube.com/watch?v=6eoK_yxY8Ak", label:"Banded Lateral Walk", source:"YouTube" },
+  step_down:   { url:"https://www.youtube.com/watch?v=rvI7OxBQqS4", label:"Step-Downs", source:"YouTube" },
+  asst_pistol: { url:"https://www.youtube.com/watch?v=shnH3-y0rcE", label:"Assisted Pistol Squat", source:"YouTube" },
+  rev_nordic:  { url:"https://www.youtube.com/watch?v=PvJDjcfZe1c", label:"Reverse Nordic Lean Isometric", source:"YouTube" },
+};
+
+// ─── WRIST DAYS ───────────────────────────────────────────────────────────────
+const WRIST_DAYS = [
+  { day:"Monday", tag:"MON", ringDay:"After Push 1",
+    note:"Flexion/extension balance. Do immediately after Push 1 — wrists are already warm.",
+    slots:[
+      { name:"Finger Flexion Wrist Curls", dur:"1 min", detail:"Controlled full range. Squeeze hard at the bottom.", vidKey:"finger_curl" },
+      { name:"Reverse Wrist Curls / Extension", dur:"1 min", detail:"Full range slow reps. Balances the flexor work.", vidKey:"wrist_ext" },
+      { name:"Finger Flexion Wrist Curls", dur:"1 min", detail:"Second set. Maintain the same clean range of motion.", vidKey:"finger_curl" },
+      { name:"Reverse Wrist Curls / Extension", dur:"1 min", detail:"Second set. Slow and controlled.", vidKey:"wrist_ext" },
+      { name:"Shake Out / Rest", dur:"1 min", detail:"Shake hands loose. Let the forearms fully decompress.", vidKey:null },
+    ]},
+  { day:"Tuesday", tag:"TUE", ringDay:"After Pull 1",
+    note:"Dead hang emphasis. Pull 1 already works grip heavily. Dead hang here also reinforces swim shoulder decompression.",
+    slots:[
+      { name:"Dead Hang", dur:"1 min", detail:"Full passive hang. Let shoulder fully depress. Breathe slowly.", vidKey:"dead_hang" },
+      { name:"Rest", dur:"1 min", detail:"Hands open, shake lightly.", vidKey:null },
+      { name:"Dead Hang", dur:"1 min", detail:"Second set. Try to beat your continuous hold from set 1.", vidKey:"dead_hang" },
+      { name:"Extensor Band Finger Opens", dur:"1 min", detail:"Balances the flexor demand from the hang.", vidKey:"ext_band" },
+      { name:"Rest", dur:"1 min", detail:"Full rest. Hands open and relaxed.", vidKey:null },
+    ]},
+  { day:"Wednesday", tag:"WED", ringDay:"Rest / Swim A",
+    note:"Pinch grip focus. No ring conflict today. Trains the thumb and radial hand separately from the fingers.",
+    slots:[
+      { name:"Dumbbell Pinch Hold — Right Hand", dur:"1 min", detail:"Pinch the dumbbell head between thumb and fingers. Full 60s hold.", vidKey:"pinch_hold" },
+      { name:"Dumbbell Pinch Hold — Left Hand", dur:"1 min", detail:"Switch immediately. Always work the weaker side to equal the stronger.", vidKey:"pinch_hold" },
+      { name:"Dumbbell Pinch Hold — Right Hand", dur:"1 min", detail:"Second round. Try to match or beat the first set time.", vidKey:"pinch_hold" },
+      { name:"Dumbbell Pinch Hold — Left Hand", dur:"1 min", detail:"Second round.", vidKey:"pinch_hold" },
+      { name:"Extensor Band Finger Opens", dur:"1 min", detail:"Antagonist balance after all the pinch flexion work.", vidKey:"ext_band" },
+    ]},
+  { day:"Thursday", tag:"THU", ringDay:"After Push 2",
+    note:"Grip and forearm density. Brookfield towel wring trains the forearm rotators — a movement pattern unique to this day.",
+    slots:[
+      { name:"Brookfield Towel Wring / Twist", dur:"1 min", detail:"Wring the towel as hard as possible — alternate directions each rep.", vidKey:"towel_wring" },
+      { name:"Thick-Handle Hammer Curls", dur:"1 min", detail:"Neutral grip, controlled tempo. Thick handle loads brachioradialis and forearm flexors together.", vidKey:"hammer_curl" },
+      { name:"Brookfield Towel Wring / Twist", dur:"1 min", detail:"Second set. Wring harder — forearm burn is normal.", vidKey:"towel_wring" },
+      { name:"Thick-Handle Hammer Curls", dur:"1 min", detail:"Second set. Keep wrists neutral throughout the curl.", vidKey:"hammer_curl" },
+      { name:"Rest", dur:"1 min", detail:"Full rest. Forearms are working hard today.", vidKey:null },
+    ]},
+  { day:"Friday", tag:"FRI", ringDay:"After Pull 2",
+    note:"Full-week integration. Combines flexion, extension, and dead hang to finish the training week.",
+    slots:[
+      { name:"Finger Flexion Wrist Curls", dur:"1 min", detail:"End-of-week flexion set. Slow eccentric.", vidKey:"finger_curl" },
+      { name:"Reverse Wrist Curls / Extension", dur:"1 min", detail:"Paired with flexion. Never skip the extensor side.", vidKey:"wrist_ext" },
+      { name:"Finger Flexion Wrist Curls", dur:"1 min", detail:"Second set.", vidKey:"finger_curl" },
+      { name:"Reverse Wrist Curls / Extension", dur:"1 min", detail:"Second set.", vidKey:"wrist_ext" },
+      { name:"Dead Hang", dur:"1 min", detail:"Finish with a hang. Decompresses shoulder after Pull 2.", vidKey:"dead_hang" },
+    ]},
+  { day:"Saturday", tag:"SAT", ringDay:"Swim Day",
+    note:"Mixed grip day. Do this BEFORE swimming — 5 minutes only. Water will help the forearms recover afterward.",
+    slots:[
+      { name:"Thick-Handle Hammer Curls", dur:"1 min", detail:"Load the forearm before swimming. Activates grip and brachioradialis.", vidKey:"hammer_curl" },
+      { name:"Dumbbell Pinch Hold", dur:"1 min", detail:"One set each hand or 2 min total alternating.", vidKey:"pinch_hold" },
+      { name:"Brookfield Towel Wring / Twist", dur:"1 min", detail:"Forearm rotator activation.", vidKey:"towel_wring" },
+      { name:"Reverse Wrist Curls / Extension", dur:"1 min", detail:"Extensor priming before the pulling demands of swimming.", vidKey:"wrist_ext" },
+      { name:"Extensor Band Finger Opens", dur:"1 min", detail:"Final balance work before pool entry.", vidKey:"ext_band" },
+    ]},
+  { day:"Sunday", tag:"SUN", ringDay:"Legs Day",
+    note:"Wrist: active recovery only on leg day. Very light effort — blood flow and tissue maintenance only.",
+    slots:[
+      { name:"Very Light Wrist Curls", dur:"1 min", detail:"Light weight only. Flush blood through the forearm flexors.", vidKey:"finger_curl" },
+      { name:"Very Light Reverse Wrist Curls", dur:"1 min", detail:"Light weight only. Gentle extensor flush.", vidKey:"wrist_ext" },
+      { name:"Extensor Band Finger Opens", dur:"1 min", detail:"Light band. Gentle finger extension through full range.", vidKey:"ext_band" },
+      { name:"Easy Dead Hang", dur:"1 min", detail:"Passive hang only — do not try to beat records. Let gravity decompress everything.", vidKey:"dead_hang" },
+      { name:"Moderate Towel Wring", dur:"1 min", detail:"60–70% effort only. Maintain the movement pattern without stressing tendons.", vidKey:"towel_wring" },
+    ]},
+];
+
+// ─── SWIM PHASES ──────────────────────────────────────────────────────────────
+const swimPhases = [
+  {
+    label:"Visit 1", weeks:"Foundation",
+    title:"Foundation — Body Position & Stroke Rebuild",
+    overview:"Re-establish horizontal body position, balance, and stroke muscle memory. Two swims per visit (Day 1 and Day 3) with a rest day between, so shoulders and technique can consolidate.",
+    sources:"Effortless Swimming (body position module) · MySwimPro beginner rebuild · Fares Ksebati stroke foundation principles",
+    keyMetric:"Stroke count per 20m — log every single length every session. This is your baseline.",
+    wedAvailable:false,
+    sat:{
+      label:"Saturday Session", duration:"~40 min", volume:"~440m (Day 1) → ~480m (Day 3)",
+      equipment:"Fins + snorkel for all drills. No equipment for main set.",
+      progression:"Day 1: 8×20m main set. Day 3: 10×20m main set, and drop the fins from the catch-up drill.",
+      warmup:[
+        { name:"Easy freestyle", reps:"3×20m, 20s rest", note:"No pressure. Eyes at pool floor, body relaxed. Feel the water again." },
+        { name:"Easy backstroke", reps:"3×20m, 20s rest", note:"Opens the chest and shoulder girdle. Relaxes the lats after ring training." },
+      ],
+      drills:[
+        { name:"Kick in streamline", reps:"2×20m, 20s rest", equip:"Fins", note:"Arms locked in tight streamline above head. Kick from the HIPS — not the knees. If your hips drop, press your chest slightly down." },
+        { name:"6-Kick Switch", reps:"2×20m, 20s rest", equip:"Fins + snorkel", note:"6 kicks on your side, then one stroke and switch sides. Keep the kick small and fast." },
+        { name:"Catch-up drill", reps:"2×20m, 20s rest", equip:"Fins + snorkel", note:"One arm waits fully extended at the front. The other completes its full stroke and TOUCHES the waiting hand before the next stroke begins. Forces stroke length. Day 3: remove fins." },
+      ],
+      mainSet:[
+        { name:"Freestyle — stroke count focus", reps:"8×20m (Day 1) / 10×20m (Day 3), 25s rest", note:"Moderate effort only. COUNT STROKES every single length. Focus: chest pressed slightly down, eyes at pool floor. Fares Ksebati: 'Never sacrifice technique to swim fast at this stage.'" },
+      ],
+      cooldown:[
+        { name:"Easy backstroke", reps:"2×20m, relaxed", note:"Very slow. Deep breaths. Let shoulders recover." },
+      ],
+      coachNote:"Your body acts as a seesaw. If your head lifts, your hips drop and you create drag. Look at the pool floor. Press your chest slightly down to bring hips up. Effortless Swimming: 'Body position is the single highest-return fix for most adult swimmers. Fix it first before anything else.'",
+    },
+    wed:null,
+  },
+  {
+    label:"Visit 2", weeks:"Catch & timing",
+    title:"Catch, EVF & Breaststroke Timing",
+    overview:"Develop the Early Vertical Forearm (EVF) catch. Introduce structured breaststroke drills. Day 1 and Day 3 are the main sessions. Day 2 is short and light; skip it if your shoulders are tired.",
+    sources:"MySwimPro: 'fist drill is the single best way to improve your freestyle catch' · Effortless Swimming catch/pull module · MySwimPro breaststroke series · USMS breaststroke guide",
+    keyMetric:"Stroke count should equal or decrease vs Visit 1, even at higher effort.",
+    wedAvailable:true,
+    sat:{
+      label:"Saturday Session", duration:"~50 min", volume:"~560m (Day 1) → ~600m (Day 3)",
+      equipment:"Snorkel for fist drill. No equipment for main set or breaststroke.",
+      progression:"Day 1: 3 rounds in main set, 3-kicks-1-pull drill. Day 3: add a 4th round and upgrade to 2-kicks-1-pull.",
+      warmup:[
+        { name:"Easy freestyle", reps:"2×20m, 20s rest", note:"Establish feel for the water today." },
+        { name:"Catch-up drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Permanent warm-up drill every session from now on." },
+        { name:"6-kick switch", reps:"2×20m, 20s rest", equip:"Snorkel (no fins)", note:"Challenge yourself without fin assistance." },
+      ],
+      drills:[
+        { name:"Fist drill", reps:"4×20m, 20s rest", equip:"Snorkel", note:"Clench your fists. Swim freestyle. Removes palm surface area, forces forearms to engage for the high-elbow catch (EVF). The single best way to improve your freestyle catch. Open your hands after — they'll feel massive." },
+        { name:"Fingertip drag", reps:"2×20m, 20s rest", note:"Drag your thumb up your body during recovery. Enforces high elbow during recovery phase." },
+        { name:"Freestyle — apply the catch", reps:"2×20m, 20s rest", note:"Swim normally. Apply EVF. Elbow high, forearm pressing back as a unit." },
+      ],
+      mainSet:[
+        { name:"Freestyle — 3 progressive rounds", reps:"3 rounds × 4×20m — 20s within, 60s between", note:"Round 1: easy. Round 2: moderate. Round 3: moderate-strong. Track stroke count every length every round." },
+      ],
+      breaststroke:[
+        { name:"3-Kicks-1-Pull (Day 1) / 2-Kicks-1-Pull (Day 3)", reps:"2×20m, 30s rest", note:"Feel the glide across the kicks before you pull. Corrects the most common error: rushing the glide. Knees stay shoulder-width." },
+        { name:"Full breaststroke", reps:"2×20m, 30s rest", note:"Apply the drill timing: PULL — KICK — GLIDE. 2-count glide in streamline after every stroke. Count strokes every length." },
+      ],
+      cooldown:[
+        { name:"Easy backstroke", reps:"2×20m, relaxed", note:"Opens the chest. Decompresses after catch work." },
+      ],
+      coachNote:"Enter the hand in line with your shoulder, extend forward under water, then drive the elbow UP before pulling backward with forearm and hand as a unit. This is the Early Vertical Forearm catch. Rotate into the air pocket your head creates to breathe — do not lift. Exhale fully underwater before turning.",
+    },
+    wed:{
+      label:"Wednesday Session (optional)", duration:"~30–35 min", volume:"~320m",
+      equipment:"Snorkel for drills only. No fins. No equipment for main set.",
+      note:"Your middle-day swim: intentionally SHORT and LOW EFFORT. If your shoulders feel tired, skip it and rest.",
+      warmup:[{ name:"Easy mixed choice", reps:"4×20m, 20s rest", note:"Freestyle or backstroke. Very easy pace — active recovery only." }],
+      drills:[
+        { name:"Catch-up drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Feel the stroke without taxing the shoulders." },
+        { name:"2-Kicks-1-Pull breaststroke drill", reps:"2×20m, 30s rest", note:"Focus on the rhythm hand-off between kick and glide." },
+      ],
+      mainSet:[{ name:"Alternating freestyle / breaststroke", reps:"6×20m alternating, 25s rest", note:"1 freestyle length, 1 breaststroke length, repeat 3 times. Technical only — not hard effort. Count strokes every length." }],
+      cooldown:[{ name:"Easy backstroke", reps:"2×20m", note:"Very slow. Shoulders relaxed." }],
+      coachNote:"If your shoulders feel at all tired on the first warm-up push-off, get out and skip it. Healthy shoulders matter more than the extra lengths.",
+    },
+  },
+  {
+    label:"Visit 3+", weeks:"Aerobic build",
+    title:"Aerobic Build & Full Stroke Integration",
+    overview:"Maintain stroke quality under compressed rest. Use all three days: main sessions on Day 1 and Day 3, a lighter aerobic session on Day 2. Build volume gradually from visit to visit (about 10% at a time).",
+    sources:"MySwimPro progressive overload · Effortless Swimming rhythm integration · Fares Ksebati compressed rest protocols · USMS breaststroke guide",
+    keyMetric:"If stroke count spikes 3–4+ above Visit 1 baseline → stop the round and rest longer. Quality over quantity.",
+    wedAvailable:true,
+    sat:{
+      label:"Saturday Session", duration:"~55 min", volume:"~600m → ~640m on later visits",
+      equipment:"Snorkel for warm-up drills only. No equipment for main sets.",
+      progression:"Visit 3: 4 rounds, 10s within rounds. Each later visit: tighten toward 8s and build breaststroke to 6×20m.",
+      warmup:[
+        { name:"Easy freestyle + backstroke mix", reps:"4×20m, 20s rest", note:"Establish your baseline stroke count for today." },
+        { name:"Catch-up drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Permanent warm-up drill. Keeps stroke length sharp." },
+        { name:"Fist drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Permanent warm-up drill. Wakes up the EVF catch." },
+      ],
+      mainSet:[
+        { name:"Freestyle — compressed rest", reps:"4 rounds × 3×20m — 10s rest within, 45s between", note:"Track stroke count every length. If count spikes 3–4+ above your Visit 1 baseline → take extra rest. Do NOT grind through sloppy technique." },
+      ],
+      breaststroke:[
+        { name:"2-Kicks-1-Pull drill warm-up", reps:"2×20m, 30s rest", note:"Re-establish rhythm before the full breaststroke set." },
+        { name:"Full breaststroke", reps:"4×20m (Visit 3) / 6×20m (later visits), 25s rest", note:"Target: 7–10 strokes per 20m. 2-count glide in streamline after every stroke cycle. Knees shoulder-width — wider creates drag that cancels your propulsion." },
+      ],
+      cooldown:[
+        { name:"Easy backstroke", reps:"2×20m", note:"Opens the chest after all the freestyle and breaststroke work." },
+        { name:"Choice — very easy", reps:"2×20m", note:"Any stroke. Long strokes, deep breaths, fully relaxed." },
+      ],
+      coachNote:"Breaststroke timing: arms pull and legs are streamlined — they NEVER overlap. Legs kick and arms are extended forward. Fares Ksebati: 'Elite breaststrokers get to streamline as quickly as possible after every stroke — that's the goal no matter your level.'",
+    },
+    wed:{
+      label:"Wednesday Session", duration:"~40–45 min", volume:"~420m",
+      equipment:"Snorkel for drills only. No equipment for main set.",
+      note:"A real training session, still shorter than your main days, with genuine aerobic intent.",
+      warmup:[{ name:"Easy choice", reps:"4×20m, 20s rest", note:"Freestyle or backstroke. Get the feel." }],
+      drills:[
+        { name:"Fist drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Wake up the EVF catch before main work." },
+        { name:"Catch-up drill", reps:"2×20m, 20s rest", equip:"Snorkel", note:"Maintain stroke length feel." },
+      ],
+      mainSet:[{ name:"Freestyle — moderate aerobic", reps:"3 rounds × 3×20m — 15s within, 45s between", note:"Round 1 easy, Round 2 moderate, Round 3 moderate. No sprint effort. Track stroke count." }],
+      cooldown:[{ name:"Easy backstroke + breaststroke", reps:"2×20m each, relaxed", note:"Gentle breaststroke — arms only if legs feel heavy." }],
+      coachNote:"If your shoulders ache on the first warm-up push-off, get out and rest.",
+    },
+  },
+];
+
+// ─── RING SESSIONS ────────────────────────────────────────────────────────────
+// FIXED:
+//   Push 1 / D: Tricep Dip → FitnessFAQs "Dip Tutorial - Chest or Tricep" (T1L4smOP0L8)
+//               Shows bar/parallel-bar dip with explicit tricep vs chest focus distinction.
+//               Visually distinct from the ring dip in Push 2.
+//   Push 2 / E: Shoulder Shrug (Wall) → Calisthenic Movement "Shoulder Strength Routine -
+//               Scapula Shrug Circle" (YzCctmxPl9o) — correct scapular depression/elevation
+//               movement on a wall, replaces the previous incorrect Antranik video.
+
+const sessions = {
+  push1:{
+    tag:"PUSH 1", day:"Monday", color:C.push, focus:"Chest · Shoulders · Triceps", duration:"~35–40 min + 5 min wrist",
+    exercises:[
+      { id:"p1e1", num:"A", name:"Ring Push-ups", sets:2, reps:"8–12", tempo:"30X1", rest:"1:30", muscles:"Chest, Triceps, Anterior Delt", lv1:"Feet below bar", lv2:"Rings below bar", ringHeight:"Rings 20–30cm off floor. Raise for easier, lower for harder.", tip:"Keep elbows at 45°. Turn rings out slightly at the top (RTO). Instability activates chest far more than floor push-ups.", vid:{ url:"https://www.youtube.com/watch?v=gjPDz7PsZ3k", label:"Build a POWERFUL Chest with Gymnastic Rings | Ring Push-Up", source:"Rings Tutorial" } },
+      { id:"p1e2", num:"B", name:"Archer Push-up", sets:2, reps:"4–6 each side", tempo:"20X0", rest:"1:30", muscles:"Chest, Shoulders, Core", lv1:"Alternating side each rep", lv2:"1s pause at bottom", ringHeight:"Same as Ring Push-ups — about 20–30cm off floor.", tip:"Extend one arm fully to the side while the other bends and drives the rep. Keep hips square. Explosive pressing phase.", vid:{ url:"https://www.youtube.com/watch?v=5nE7SVZDdyg", label:"How to Archer Push-up on RINGS | Develop a BIG Chest", source:"Rings Tutorial" } },
+      { id:"p1e3", num:"C", name:"Chest Fly", sets:2, reps:"8–10", tempo:"30X0", rest:"1:30", muscles:"Chest, Anterior Delt", lv1:"3-step distance from rings", lv2:"Feet below bar", ringHeight:"Rings at knee to mid-shin height. Lower = harder.", tip:"Slight bend in elbows throughout. 3s lowering. Squeeze chest hard at top.", vid:{ url:"https://www.youtube.com/watch?v=ABSSXFgD1qw", label:"Ring Chest Fly Tutorial | UPPER Chest Gains!", source:"Cali to the Crowd" } },
+      {
+        id:"p1e4", num:"D", name:"Tricep Dip", sets:2, reps:"6–10", tempo:"20X0", rest:"1:30",
+        muscles:"Triceps (primary), Chest, Anterior Delt",
+        lv1:"Standard height, upright torso — targets triceps", lv2:"Slight forward lean to shift emphasis toward chest",
+        ringHeight:"Rings at hip/waist height to mount. Feet can assist.",
+        tip:"For the tricep-focused version: keep your torso UPRIGHT throughout. Elbows stay close to your body and drive straight down. This is mechanically different from the ring dip in Push 2 — no rings here means zero rotational instability, allowing isolated tricep overload.",
+        // FIXED: FitnessFAQs "Dip Tutorial - Chest or Tricep" — explicitly shows and explains
+        // the difference between tricep dip (upright torso, elbows in) and chest dip
+        // (forward lean, elbows out). Visually distinct from the ring dip exercise.
+        vid:{ url:"https://www.youtube.com/watch?v=T1L4smOP0L8", label:"Dip Tutorial — Chest or Tricep (how to target each)", source:"FitnessFAQs" }
+      },
+      { id:"p1e5", num:"E", name:"Ring Roll-out", sets:2, reps:"8–10", tempo:"40X0", rest:"1:30", muscles:"Core, Shoulders, Triceps, Lats", lv1:"Knees on floor", lv2:"Standing, feet below bar", ringHeight:"Rings very low — a few cm off floor.", tip:"4-second controlled roll out. Core fully braced. Don't let hips sag.", vid:{ url:"https://www.youtube.com/watch?v=cGz4fNiEFW0", label:"Ring Roll-Out | Proper Form for Core Strength", source:"Rings Tutorial" } },
+    ]
+  },
+  pull1:{
+    tag:"PULL 1", day:"Tuesday", color:C.pull, focus:"Back · Biceps · Rear Delts", duration:"~35–40 min + 5 min wrist",
+    exercises:[
+      { id:"pu1e1", num:"A", name:"Scap Pull-ups → Pull-ups", sets:2, reps:"5–10", tempo:"30X1", rest:"2:00", muscles:"Lats, Traps, Biceps, Rhomboids", lv1:"Scapula pull-ups only", lv2:"Full pull-ups", ringHeight:"Pull-up bar at overhead height.", tip:"Start every set with 2–3 scap pull-ups before full reps. Scapular initiation is the foundation of all pulling — and the primary engine of your freestyle catch.", vid:{ url:"https://www.youtube.com/watch?v=KG8JZJ22NQI", label:"The Best Exercise to Increase Pull-ups — Scap Pull", source:"FitnessFAQs" } },
+      { id:"pu1e2", num:"B", name:"Bodyweight Row (2-arm)", sets:2, reps:"10–15", tempo:"20X1", rest:"1:30", muscles:"Upper Back, Rear Delt, Biceps", lv1:"3-step distance (more upright)", lv2:"Feet below bar (more horizontal)", ringHeight:"Rings at waist/hip height.", tip:"Pull chest to rings, not hands to chest. Hold 1s at top squeezing shoulder blades. Body stays rigid as a plank.", vid:{ url:"https://www.youtube.com/watch?v=z4RJcgEKRSQ", label:"Top 3 Rows Everyone Needs — Beginner to Advanced", source:"FitnessFAQs" } },
+      { id:"pu1e3", num:"C", name:"Pelican Curl", sets:2, reps:"5–8", tempo:"30X0", rest:"1:30", muscles:"Biceps, Brachialis (long-stretch)", lv1:"More upright (less bodyweight)", lv2:"Feet more forward (more bodyweight)", ringHeight:"Rings at hip height behind you.", tip:"Control the 3s eccentric carefully — very high tension on the bicep tendon. Start conservatively.", vid:{ url:"https://www.youtube.com/watch?v=-EL36SmwNuY", label:"Pelican Curls — Best Bicep Exercise You've Never Heard Of", source:"Minus The Gym" } },
+      { id:"pu1e4", num:"D", name:"Reverse Fly", sets:2, reps:"10–15", tempo:"30X0", rest:"1:30", muscles:"Rear Delt, Rhomboids, Upper Back", lv1:"3-step distance (more upright)", lv2:"2-step distance (more horizontal)", ringHeight:"Rings at chest to shoulder height.", tip:"Arms wide, slight elbow bend throughout. Pull rings apart horizontally. Squeeze shoulder blades hard at top.", vid:{ url:"https://www.youtube.com/watch?v=-X8vMtGx1Ls", label:"Rear Delts — Face Pulls & Reverse Flyes on Rings", source:"Rings Tutorial" } },
+      { id:"pu1e5", num:"E", name:"Top Support Hold", sets:2, reps:"5–10s hold", tempo:"—", rest:"1:30", muscles:"Shoulders, Triceps, Core, Forearms", lv1:"Neutral grip, legs bent", lv2:"Rings turned out (RTO), legs straight", ringHeight:"Rings at hip height to mount and support bodyweight above.", tip:"Foundation for all ring work. Lock elbows fully, depress shoulders away from ears. This body position mirrors your freestyle streamline.", vid:{ url:"https://www.youtube.com/watch?v=9PKChU9Ozs8", label:"Master the RTO Support Hold — Still Rings Basics", source:"Antranik" } },
+    ]
+  },
+  push2:{
+    tag:"PUSH 2", day:"Thursday", color:C.push, focus:"Shoulders · Chest · Triceps", duration:"~35–40 min + 5 min wrist",
+    exercises:[
+      { id:"p2e1", num:"A", name:"Ring Dip", sets:2, reps:"6–8", tempo:"30X1", rest:"1:30", muscles:"Triceps, Chest, Shoulders", lv1:"Negative dips only (5–6s descent)", lv2:"Full ring dip with RTO at top", ringHeight:"Rings at hip/chest height. Feet must clear the floor.", tip:"Ring dips are harder than bar dips because the rings rotate and require constant stabilisation throughout the movement. If you can't do ring dips yet: jump to the top, lower over 5–6 slow seconds. Build strength this way before full reps.", vid:{ url:"https://www.youtube.com/watch?v=iZAVN-UQ5Zc", label:"Ring Dip Technique, Prerequisites & Why You Need Them", source:"The Movement Athlete" } },
+      { id:"p2e2", num:"B", name:"Pike / Shoulder Push-up", sets:2, reps:"4–8", tempo:"30X1", rest:"1:30", muscles:"Anterior Delt, Triceps, Upper Chest", lv1:"Feet on floor", lv2:"Feet elevated on a surface", ringHeight:"No rings — perform on the floor.", tip:"Body forms an inverted V. The more vertical you are, the more it targets the shoulders. Crown of head toward floor at the bottom.", vid:{ url:"https://www.youtube.com/watch?v=DG-NcMnfZ_0", label:"Instant Pike Push-Up Fix — Do More Reps", source:"FitnessFAQs" } },
+      { id:"p2e3", num:"C", name:"Bulgarian Push-up", sets:2, reps:"6–10", tempo:"20X0", rest:"1:30", muscles:"Chest, Shoulders, Triceps", lv1:"Standard (elbows flare out)", lv2:"1s pause at bottom", ringHeight:"Rings very low — 10–20cm off floor.", tip:"Elbows flare out intentionally for a deep chest stretch comparable to dumbbell flyes. Extra range = extra chest stimulus.", vid:{ url:"https://www.youtube.com/watch?v=VvJWj-JW8zs", label:"The BEST Push-Up for Bigger Chest — Bulgarian on Rings", source:"FitnessFAQs" } },
+      { id:"p2e4", num:"D", name:"Bodyweight Tricep Extension", sets:2, reps:"8–10", tempo:"30X1", rest:"1:30", muscles:"Triceps (long head), Core", lv1:"Rings higher (less bodyweight)", lv2:"Rings lower (more bodyweight)", ringHeight:"Rings at chest to waist height, facing away from anchor. Lower = harder.", tip:"Upper arms and elbows stay completely fixed — only the forearms move. 3s controlled extension, explosive press back.", vid:{ url:"https://www.youtube.com/watch?v=kzqJ9rhBO4s", label:"Bodyweight Tricep Extensions — Tutorial", source:"FitnessFAQs" } },
+      {
+        id:"p2e5", num:"E", name:"Shoulder Shrug (Wall)", sets:2, reps:"8–12 (2s hold)", tempo:"Isometric", rest:"1:30",
+        muscles:"Upper Traps, Scapular Stabilisers, Serratus Anterior",
+        lv1:"Back flat to wall", lv2:"Free standing",
+        ringHeight:"No rings — use wall for feedback.",
+        tip:"Stand with back against wall. Shrug shoulders up and back, hold 2 seconds, release fully. The wall gives you proprioceptive feedback on scapular position. This exercise resets shoulder position and guards against impingement — never skip it.",
+        // FIXED: Calisthenic Movement "Shoulder Strength Routine - Scapula Shrug Circle"
+        // (YzCctmxPl9o) — correct exercise showing scapular shrug and depression work.
+        // Replaces the previous incorrect Antranik video which did not show this movement.
+        vid:{ url:"https://www.youtube.com/watch?v=YzCctmxPl9o", label:"Scapula Shrug Circle — Shoulder Strength Routine", source:"Calisthenic Movement" }
+      },
+    ]
+  },
+  pull2:{
+    tag:"PULL 2", day:"Friday", color:C.pull, focus:"Back · Biceps · Grip Strength", duration:"~35–40 min + 5 min wrist",
+    exercises:[
+      { id:"pu2e1", num:"A", name:"Chin-up (underhand grip)", sets:2, reps:"5–8", tempo:"30X2", rest:"2:00", muscles:"Biceps, Lats, Rear Delt", lv1:"Underhand (chin-up) grip", lv2:"Neutral grip", ringHeight:"Pull-up bar or rings at full overhead hang height.", tip:"Hold a full 2s squeeze at the very top. 3s controlled descent. Lat strength here directly drives your freestyle catch and early pull.", vid:{ url:"https://www.youtube.com/watch?v=UP_GGcVIJuc", label:"Are You Doing Pull-Ups Correctly? Avoid Mistakes", source:"FitnessFAQs" } },
+      { id:"pu2e2", num:"B", name:"Archer Bodyweight Row", sets:2, reps:"4–8 each side", tempo:"20X0", rest:"1:30", muscles:"Upper Back, Lats, Biceps (unilateral)", lv1:"Standard", lv2:"Feet below bar", ringHeight:"Rings at waist/hip height.", tip:"One arm rows to chest while the other extends to the side. Always start with the weaker side first. Keep hips level.", vid:{ url:"https://www.youtube.com/watch?v=z4RJcgEKRSQ", label:"Top 3 Rows Everyone Needs (includes Archer Row)", source:"FitnessFAQs" } },
+      { id:"pu2e3", num:"C", name:"Bodyweight Bicep Curl", sets:2, reps:"8–10", tempo:"30X1", rest:"1:30", muscles:"Biceps, Brachialis, Brachioradialis", lv1:"Standard (more upright)", lv2:"Feet more forward", ringHeight:"Rings at waist height facing anchor.", tip:"Actively supinate (rotate) the wrists to palms-up at the top for maximum bicep contraction. Hold 1s. 3s controlled lowering.", vid:{ url:"https://www.youtube.com/watch?v=A-udHJtfdvY", label:"Build Bigger Stronger Biceps with Bodyweight Rings", source:"FitnessFAQs" } },
+      { id:"pu2e4", num:"D", name:"Face Pull", sets:2, reps:"8–10", tempo:"30X0", rest:"1:30", muscles:"Rear Delt, Rotator Cuff, Rhomboids, Traps", lv1:"Slightly forward lean", lv2:"Feet more forward (more horizontal)", ringHeight:"Rings just below head height.", tip:"Pull rings to forehead level, elbows HIGH and WIDE. Squeeze shoulder blades hard at top. Most important exercise for long-term shoulder health — never skip.", vid:{ url:"https://www.youtube.com/watch?v=lm4Nt-N6qUk", label:"How to Face Pull on Gymnastic Rings — Proper Form", source:"Rings Tutorial" } },
+      { id:"pu2e5", num:"E", name:"Two-arm Dead Hang", sets:2, reps:"Max hold per set", tempo:"—", rest:"2:00", muscles:"Grip, Forearms, Lats, Shoulder Decompression", lv1:"Two-arm dead hang", lv2:"Hang with hollow body / L-sit", ringHeight:"Rings or bar at full overhead hang height — feet clear the floor.", tip:"Track total hang time every session and beat it. Builds grip strength, decompresses spine, and conditions shoulders for swimming.", vid:{ url:"https://www.youtube.com/watch?v=dOCQjaasbGs", label:"How To Dead Hang Correctly", source:"FitnessFAQs" } },
+    ]
+  },
+};
+
+// ─── LEG DAY DATA ─────────────────────────────────────────────────────────────
+const LEG_EVIDENCE = [
+  "2024 Network Meta-Analysis (flexible flatfoot): Hip-focused neuromuscular exercise, internal-foot + glute training, and posterior tibial/arch-oriented work all improved arch-related outcomes.",
+  "2023 Systematic Review/Meta-Analysis: Intrinsic foot muscle training improves foot function and balance. Short-foot exercise commonly progressed from sitting to bipedal standing before single-leg loading.",
+  "6-Week RCT: Short-foot exercise combined with lower-extremity training improved dynamic foot function and navicular-drop-related measures significantly more than foot-only work.",
+  "Ankle Dorsiflexion Systematic Review: Greater dorsiflexion associated with better landing mechanics and lower-limb control. Limited ankle dorsiflexion linked with worse single-leg squat control.",
+  "Clinical Review on Squatting: Trunk and tibia position meaningfully change hip and knee loading. Depth taken beyond available hip motion produces posterior pelvic tilt. Pistol is a high-skill integration exercise, not a standalone solution.",
+  "ACSM Resistance Training Guidelines: A single well-built session still produces meaningful strength and neuromuscular adaptation when that is the realistic constraint.",
+];
+const PISTOL_PROGRESSION = [
+  { step:"1", label:"Support-Assisted Squat", desc:"Hold a TRX, ring, or door frame. Work full depth with heel flat and arch controlled. Build single-leg confidence." },
+  { step:"2", label:"High Box Pistol", desc:"Sit back onto a high box. Stand up on one leg. Lower the box height only when arch, knee line, and pelvis are all stable." },
+  { step:"3", label:"Lower Box Pistol", desc:"Same as above but box is below parallel. Do not lower the box until the current height is clean on both sides." },
+  { step:"4", label:"Counterbalance Pistol", desc:"Hold a weight plate or small dumbbell out front to counterbalance. Allows a more upright torso and better heel contact." },
+  { step:"5", label:"Full Pistol", desc:"Unassisted, full depth. Only attempt this when arch stays controlled, heel stays down, knee tracks over 2nd–3rd toe, and no pelvic tuck on both sides." },
+];
+const TECH_CUES = [
+  "Tripod foot: maintain contact at big toe, little toe, and heel throughout every rep.",
+  "Let the knee travel forward only if the heel stays down and the arch stays controlled.",
+  "Own the bottom range — do not chase depth if control disappears.",
+  "Stop 1–2 reps before form breaks on all pistol work.",
+  "If arch collapses, heel lifts, or knee caves in: stay at the current pistol level longer.",
+  "If the medial navicular is painful or becoming more prominent, stop single-leg loading and get it assessed.",
+];
+const LEG_WARMUP = [
+  { name:"Short-Foot Hold", sets:"2×20–30s each foot", detail:"Dome the arch by pulling the ball of the foot toward the heel — do not curl the toes. Seated first (weeks 1–2), then standing.", vidKey:"short_foot" },
+  { name:"Knee-to-Wall Ankle Rocks", sets:"2×10 each side", detail:"Stand ~10cm from wall, drive knee forward over 2nd toe. Keep heel flat. Add distance over weeks.", vidKey:"knee_wall" },
+  { name:"Tibialis Raises", sets:"2×15–20", detail:"Stand with heels against a wall, raise forefeet as high as possible. Controls arch, prevents shin splints, reduces knee valgus risk.", vidKey:"tib_raise" },
+  { name:"Bodyweight Split Squat", sets:"1×8 each side", detail:"Activate single-leg pattern before loading. Check tripod foot and knee tracking. This is rehearsal, not a training set.", vidKey:"bw_split" },
+  { name:"Single-Leg Balance", sets:"1×20s each side", detail:"Eyes open first. Progress to eyes closed when easy. Challenges intrinsic foot muscles under bodyweight.", vidKey:"sl_balance" },
+];
+const LEG_STRENGTH = [
+  { name:"Romanian Deadlift (RDL)", sets:"3–4 × 6–8", detail:"Hip-hinge pattern. Builds posterior chain (hamstrings, glutes, erectors). 2024 flatfoot meta-analysis found hip-focused training the strongest intervention category.", vidKey:"rdl" },
+  { name:"Rear-Foot Elevated Split Squat (RFESS)", sets:"3 × 6–10 each side", detail:"Higher hip loading than a bilateral squat. Builds glute max and quad strength asymmetrically. Keep front foot flat, tripod contact throughout. Lead with the weak leg first.", vidKey:"rfess" },
+  { name:"Box / Counterbalance Pistol Squat", sets:"4 × 3–5 each side", detail:"Use the lowest progression level where you can maintain: (1) tripod foot, (2) knee over 2nd–3rd toe, (3) no arch collapse, (4) no pelvic tuck. See Progression for level-by-level guide.", vidKey:"pistol" },
+  { name:"Single-Leg Calf Raise", sets:"3 × 8–15 each side", detail:"On a step edge for full range. Slow eccentric (3s down). Builds posterior tibialis and soleus — both directly support the medial arch.", vidKey:"sl_calf" },
+  { name:"Hamstring Slider Curl", sets:"2–3 × 6–10", detail:"Lie on back, feet on sliders/towel. Bridge up and curl heels in. Heavy eccentric load on the hamstrings. Expect soreness for 2–3 days, so start with 1–2 sets for your first two leg days.", vidKey:"ham_slider" },
+  { name:"Side-Lying Hip Abduction", sets:"2 × 12–20 each side", detail:"Lateral hip strength. 2024 meta-analysis: hip abductor + external rotator strengthening was one of the most effective interventions for flatfoot arch improvement.", vidKey:"hip_abd" },
+  { name:"Banded Lateral Walk", sets:"2 × 12–20 steps each direction", detail:"Band around ankles or just above knees. Activates gluteus medius. Maintain tripod foot throughout each step.", vidKey:"lat_walk" },
+];
+const LEG_FINISHER = [
+  { name:"Short-Foot Hold", sets:"2×20s each foot", detail:"Reset the arch after all the loading. Conscious arch engagement before you finish.", vidKey:"short_foot" },
+  { name:"Single-Leg Balance", sets:"1×20–30s each side", detail:"Final proprioceptive challenge. Eyes closed if you can.", vidKey:"sl_balance" },
+];
+const LEG_CONTROL_DAY = [
+  { name:"Short-Foot Hold", sets:"2×20–30s each foot", detail:"Start every leg session with this.", vidKey:"short_foot" },
+  { name:"Knee-to-Wall Ankle Rocks", sets:"2×10 each side", detail:"Ankle mobility maintenance.", vidKey:"knee_wall" },
+  { name:"Step-Downs", sets:"3×5–8 each side", detail:"Stand on a low step (10–15cm), lower the free foot toward the floor slowly. Builds single-leg eccentric quad control. Keep knee over 2nd toe.", vidKey:"step_down" },
+  { name:"Assisted / Box Pistol Squat", sets:"3×3–5 each side", detail:"Technical day — use a slightly easier pistol regression than your main day. Focus entirely on positions, not reps.", vidKey:"asst_pistol" },
+  { name:"Tibialis Raises", sets:"2×15–20", detail:"Arch and shin maintenance.", vidKey:"tib_raise" },
+  { name:"Single-Leg Calf Raise", sets:"2×12–15 each side", detail:"Full range on a step. 3s eccentric.", vidKey:"sl_calf" },
+  { name:"Hamstring Slider Curl", sets:"2×6–8", detail:"Light version — fewer sets than main day.", vidKey:"ham_slider" },
+  { name:"Tall-Kneeling Reverse Nordic Lean (isometric)", sets:"2×10–20s hold", detail:"Only if pain-free. Hold the leaned-back position isometrically. Builds the anterior knee chain in a lengthened position.", vidKey:"rev_nordic" },
+];
+
+const weekDays = [
+  { d:"MON", type:"push", label:"Push 1", key:"push1" },
+  { d:"TUE", type:"pull", label:"Pull 1", key:"pull1" },
+  { d:"WED", type:"rest", label:"Rest /\nSwim A", key:"swim" },
+  { d:"THU", type:"push", label:"Push 2", key:"push2" },
+  { d:"FRI", type:"pull", label:"Pull 2", key:"pull2" },
+  { d:"SAT", type:"swim", label:"Swim B", key:"swim" },
+  { d:"SUN", type:"legs", label:"Legs\n(opt.)", key:"legs" },
+];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// ─── SHIFT PLAN (queue-based, no fixed weekdays) ──────────────────────────────
+const exById=id=>Object.values(sessions).flatMap(s=>s.exercises).find(e=>e.id===id);
+const RING_A=["pu1e1","p1e1","pu1e2","p1e4","pu2e4","p1e5"];
+const RING_B=["p2e1","pu2e1","p2e2","pu2e2","pu1e4","p2e5"];
+const LIGHT=[
+  {c:"#4ade80",t:"Green",d:"Slept 7h+ and feel normal → full session as written."},
+  {c:"#facc15",t:"Yellow",d:"About 5–7h, first day off after nights, or just tired → 1 set per exercise, stop 2–3 reps short. Skip Ring Dip, Pelican Curl and pistols."},
+  {c:"#f87171",t:"Red",d:"Under 5h, ill, or shoulder pain → wrist, hollow body and mobility only."},
+];
+const PLAN_RULES=[
+  ["Queue, not calendar","Alternate Ring A and Ring B on any off day you are Green or Yellow. Nothing is ever missed: just do the next one."],
+  ["Work days: micro-dose only","5–10 min: 2–3 moves from the Wrist tab, hollow body 2×20–30s, short-foot 2×20s each foot. No real training after a 12-hour shift."],
+  ["After nights","Sleep first. The first off day after a night shift is Yellow at most. Skip training on quick turnarounds."],
+  ["Legs","Only on day 1 of an off run of 2+ days, at most once per 7 days. Start with half the sets for your first two leg days."],
+  ["Bonus slot (optional)","Night-shift day: if you woke rested, a Yellow-level Ring session in the afternoon is fine. Finish at least 2–3 h before you leave."],
+  ["Recovery basics","Protect a 7–9 h sleep window after nights (dark room). Protein about 1.6 g/kg/day (about 115 g at 71 kg); pack portable protein for shifts."],
+];
+const MONTH=[
+  ["Work-base 3-day block","Day 1 Legs · Day 2 Ring A · Day 3 Ring B. Swap any day for rest if you are Red."],
+  ["Hometown 3-day block (pool)","Day 1 main swim · Day 2 light swim (Visit 2+) or rest; Ring A only if you feel fresh · Day 3 main swim. No legs here: sore hamstrings hurt the breaststroke kick. If the trip lands on the other off block, swap the two blocks."],
+  ["Scattered off days (about 8–9)","Next session in the queue. Total: about 8–9 strength sessions and 2–3 swims a month, enough for 2 strength days in most weeks."],
+  ["Swim visits","Visit 1 = Foundation, Visit 2 = Catch and timing, Visit 3+ = Aerobic build (repeat and progress). Re-test stroke count each visit; hollow body holds and Ring pulls carry over between visits."],
+];
+function InfoCard({color,title,children}){
+  return(
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${color}`,borderRadius:10,padding:"12px 14px",marginBottom:9}}>
+      <div style={{color,fontWeight:700,fontSize:13,marginBottom:4}}>{title}</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.6}}>{children}</div>
+    </div>
+  );
+}
+function PlanView({onNav}){
+  const go=[["Ring A","ringA",C.push],["Ring B","ringB",C.pull],["Legs","legs",C.legs],["Swim","swim",C.swim],["Wrist","wrist",C.wrist]];
+  const lib=[["Push 1","push1"],["Pull 1","pull1"],["Push 2","push2"],["Pull 2","pull2"]];
+  const H=(t)=>(<div style={{color:C.muted,fontSize:10,letterSpacing:1.5,textTransform:"uppercase",margin:"16px 0 8px"}}>{t}</div>);
+  return(
+    <div style={{padding:16}}>
+      <div style={{color:C.push,fontSize:16,fontWeight:800,marginBottom:4}}>Shift-Proof Plan</div>
+      <div style={{color:C.muted,fontSize:12,lineHeight:1.6}}>16 twelve-hour shifts a month, random day/night mix. No fixed weekdays: a queue of sessions you pick up on any off day you are ready for.</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
+        {go.map(([l,id,c])=>(<button key={id} onClick={()=>onNav(id)} style={{background:c+"18",border:`1px solid ${c}50`,color:c,borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>))}
+      </div>
+      {H("Readiness light — check before every session")}
+      {LIGHT.map(x=>(<InfoCard key={x.t} color={x.c} title={x.t}>{x.d}</InfoCard>))}
+      {H("Rules")}
+      {PLAN_RULES.map(([t,d])=>(<InfoCard key={t} color={C.push} title={t}>{d}</InfoCard>))}
+      {H("Your month")}
+      {MONTH.map(([t,d])=>(<InfoCard key={t} color={C.swim} title={t}>{d}</InfoCard>))}
+      {H("Original split sessions (reference)")}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {lib.map(([l,id])=>(<button key={id} onClick={()=>onNav(id)} style={{background:C.card,border:`1px solid ${C.border2}`,color:C.muted,borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer"}}>{l}</button>))}
+      </div>
+    </div>
+  );
+}
+function RingFullView({which,activeVid,setActiveVid}){
+  const isA=which==="ringA"; const ids=isA?RING_A:RING_B; const col=isA?C.push:C.pull;
+  return(
+    <div>
+      <div style={{padding:"18px 16px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <span style={{background:col,color:"#000",fontSize:10,fontWeight:800,letterSpacing:1.2,padding:"2px 8px",borderRadius:4}}>{isA?"RING A":"RING B"}</span>
+        <div style={{color:C.muted,fontSize:13,margin:"8px 0 2px"}}>{isA?"Pull-ups · push-ups · rows · dips · rear delts · core":"Dips · chin-ups · pike push-ups · rows · rear delts · shoulder reset"}</div>
+        <div style={{color:C.dim,fontSize:12}}>⏱ ~45 min with warm-up and cool-down · 6 exercises × 2 sets</div>
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        <RingHeightBanner activeVid={activeVid} setActiveVid={setActiveVid}/>
+        <div style={{background:"#0d1a0d",border:`1px solid #1a2e1a`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+          <span style={{color:"#86efac",fontSize:12}}>✓ Check your readiness light (Plan tab), then do the full warm-up (Guide tab). Yellow = 1 set each.</span>
+        </div>
+        {ids.map((id,i)=>(<ExerciseCard key={id} ex={{...exById(id),num:"ABCDEF"[i]}} sessionColor={col} activeVid={activeVid} setActiveVid={setActiveVid}/>))}
+        <div style={{background:"#0d1a1a",border:`1px solid #1a2e2e`,borderRadius:8,padding:"10px 12px",marginTop:6}}>
+          <span style={{color:"#67e8f9",fontSize:12}}>↓ Cool-down (Guide tab), then 5 min wrist.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function typeColor(t){ return t==="push"?C.push:t==="pull"?C.pull:t==="swim"?C.swim:t==="legs"?C.legs:C.dim; }
+function Pill({children,color}){ return <span style={{background:color+"18",color,fontSize:10,fontWeight:700,letterSpacing:1.2,padding:"2px 8px",borderRadius:4,textTransform:"uppercase"}}>{children}</span>; }
+function Badge({children}){ return <span style={{background:"#1c1c1c",color:C.muted,fontSize:11,padding:"3px 8px",borderRadius:5,border:`1px solid ${C.border2}`}}>{children}</span>; }
+
+function RingHeightBanner({activeVid,setActiveVid}){
+  return(
+    <div style={{background:"#0e0a1a",border:`1px solid ${C.vid}30`,borderRadius:12,padding:"14px 16px",marginBottom:14}}>
+      <div style={{color:C.vid,fontSize:11,fontWeight:800,letterSpacing:1.4,textTransform:"uppercase",marginBottom:5}}>📐 Ring Height Reference</div>
+      <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.6,marginBottom:2}}>{RING_HEIGHT_VIDEO.note}</div>
+      <PlayButton vid={RING_HEIGHT_VIDEO} activeVid={activeVid} setActiveVid={setActiveVid}/>
+    </div>
+  );
+}
+
+function ExerciseCard({ex,sessionColor,activeVid,setActiveVid}){
+  const[open,setOpen]=useState(false);
+  return(
+    <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${open?sessionColor+"40":C.border}`,marginBottom:8,background:C.card}}>
+      <div onClick={()=>setOpen(v=>!v)} style={{padding:"14px",cursor:"pointer"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+              <span style={{width:22,height:22,borderRadius:"50%",background:sessionColor+"20",color:sessionColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{ex.num}</span>
+              <span style={{fontSize:15,fontWeight:600,color:C.text,lineHeight:1.3}}>{ex.name}</span>
+              {ex.vid&&<span style={{background:C.vid+"20",color:C.vid,fontSize:9,fontWeight:700,letterSpacing:0.8,padding:"2px 6px",borderRadius:4,textTransform:"uppercase",flexShrink:0}}>▶ VIDEO</span>}
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,paddingLeft:30}}>
+              <Badge>{ex.sets} sets</Badge><Badge>{ex.reps}</Badge><Badge>⏱ {ex.tempo}</Badge>
+              {ex.rest!=="—"&&<Badge>Rest {ex.rest}</Badge>}
+            </div>
+          </div>
+          <span style={{color:C.muted,fontSize:20,marginLeft:8,flexShrink:0}}>{open?"−":"+"}</span>
+        </div>
+      </div>
+      {open&&(
+        <div style={{borderTop:`1px solid ${C.border}`,padding:"14px"}}>
+          <div style={{marginBottom:10}}>
+            <div style={{color:C.muted,fontSize:10,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>Primary Muscles</div>
+            <div style={{color:C.text,fontSize:13}}>{ex.muscles}</div>
+          </div>
+          {ex.ringHeight&&(
+            <div style={{background:"#0d1210",border:`1px solid #1a2e1a`,borderRadius:7,padding:"9px 12px",marginBottom:10}}>
+              <div style={{color:C.muted,fontSize:10,letterSpacing:1.2,textTransform:"uppercase",marginBottom:3}}>📐 Ring Height</div>
+              <div style={{color:"#86efac",fontSize:12,lineHeight:1.5}}>{ex.ringHeight}</div>
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <div style={{color:C.muted,fontSize:10,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>Level 1</div>
+              <div style={{color:"#86efac",fontSize:12,lineHeight:1.4}}>{ex.lv1}</div>
+            </div>
+            <div>
+              <div style={{color:C.muted,fontSize:10,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>Level 2</div>
+              <div style={{color:sessionColor,fontSize:12,lineHeight:1.4}}>{ex.lv2}</div>
+            </div>
+          </div>
+          <div style={{background:"#151500",border:`1px solid #2f2e00`,borderRadius:7,padding:"10px 12px"}}>
+            <div style={{color:C.note,fontSize:12,lineHeight:1.5}}>💡 {ex.tip}</div>
+          </div>
+          <PlayButton vid={ex.vid} activeVid={activeVid} setActiveVid={setActiveVid}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionView({sk,activeVid,setActiveVid}){
+  const s=sessions[sk];
+  const tagMap={push1:"MON",pull1:"TUE",push2:"THU",pull2:"FRI"};
+  const wristDay=WRIST_DAYS.find(d=>d.tag===tagMap[sk]);
+  return(
+    <div>
+      <div style={{padding:"18px 16px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{background:s.color,color:"#000",fontSize:10,fontWeight:800,letterSpacing:1.2,padding:"2px 8px",borderRadius:4}}>{s.tag}</span>
+          <span style={{color:C.muted,fontSize:13}}>{s.day}</span>
+        </div>
+        <div style={{color:C.muted,fontSize:13,marginBottom:2}}>{s.focus}</div>
+        <div style={{color:C.dim,fontSize:12}}>⏱ {s.duration}</div>
+      </div>
+      <div style={{padding:"12px 14px"}}>
+        <RingHeightBanner activeVid={activeVid} setActiveVid={setActiveVid}/>
+        <div style={{background:"#0d1a0d",border:`1px solid #1a2e1a`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+          <span style={{color:"#86efac",fontSize:12}}>✓ Complete the warm-up protocol first — see Guide tab</span>
+        </div>
+        {s.exercises.map(ex=><ExerciseCard key={ex.id} ex={ex} sessionColor={s.color} activeVid={activeVid} setActiveVid={setActiveVid}/>)}
+        <div style={{background:"#0d1a1a",border:`1px solid #1a2e2e`,borderRadius:8,padding:"10px 12px",marginTop:6,marginBottom:6}}>
+          <span style={{color:"#67e8f9",fontSize:12}}>↓ Complete cool-down after finishing — see Guide tab</span>
+        </div>
+        {wristDay&&(
+          <div style={{background:C.wrist+"10",border:`1px solid ${C.wrist}30`,borderRadius:8,padding:"10px 12px",marginTop:8}}>
+            <span style={{color:C.wrist,fontSize:12,fontWeight:700}}>💪 Then: 5 min Wrist — {wristDay.day} plan — see Wrist tab</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── GUIDE VIEW ───────────────────────────────────────────────────────────────
+function GuideView({activeVid,setActiveVid}){
+  const[section,setSection]=useState("warmup");
+  const subs=[{id:"warmup",label:"Warm-up"},{id:"tempo",label:"Tempo"},{id:"rules",label:"Rules"}];
+  return(
+    <div>
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:"#0c0c0c"}}>
+        {subs.map(s=>(
+          <button key={s.id} onClick={()=>setSection(s.id)} style={{flex:1,padding:"11px 8px",background:"none",border:"none",borderBottom:section===s.id?`2px solid ${C.pull}`:"2px solid transparent",color:section===s.id?C.text:C.muted,fontSize:13,fontWeight:section===s.id?700:400,cursor:"pointer"}}>{s.label}</button>
+        ))}
+      </div>
+
+      {section==="warmup"&&(
+        <div style={{padding:16}}>
+          <div style={{color:C.muted,fontSize:10,letterSpacing:1.5,textTransform:"uppercase",marginBottom:12}}>Rings Warm-up — Every Session (~10 min)</div>
+          {warmupSteps.map((step,i)=>(
+            <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px",marginBottom:12}}>
+              <div style={{display:"flex",gap:10,marginBottom:8}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:C.push+"20",color:C.push,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{step.n}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:2}}>{step.name}</div>
+                  <div style={{color:C.push,fontSize:11}}>{step.dur}</div>
+                </div>
+              </div>
+              <div style={{color:C.muted,fontSize:12,lineHeight:1.5,marginBottom:10}}>{step.note}</div>
+              {step.videos.length>1?(
+                <div>
+                  <div style={{background:C.vid+"10",border:`1px solid ${C.vid}25`,borderRadius:7,padding:"6px 10px",marginBottom:6,display:"inline-block"}}>
+                    <span style={{color:C.vid,fontSize:10,fontWeight:700}}>Pick ONE per session — alternate across the week</span>
+                  </div>
+                  {step.videos.map((v,vi)=>(
+                    <PlayButton key={vi} vid={v} activeVid={activeVid} setActiveVid={setActiveVid}/>
+                  ))}
+                </div>
+              ):(
+                <PlayButton vid={step.videos[0]} activeVid={activeVid} setActiveVid={setActiveVid}/>
+              )}
+            </div>
+          ))}
+          <div style={{color:C.muted,fontSize:10,letterSpacing:1.5,textTransform:"uppercase",marginTop:20,marginBottom:12}}>Cool-down — Every Session (~5 min)</div>
+          {cooldownSteps.map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:12,marginBottom:10,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:14}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:C.pull+"20",color:C.pull,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{i+1}</div>
+              <div>
+                <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:2}}>{s.name}</div>
+                <div style={{color:C.pull,fontSize:11,marginBottom:5}}>{s.dur}</div>
+                <div style={{color:C.muted,fontSize:12,lineHeight:1.5}}>{s.note}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {section==="tempo"&&(
+        <div style={{padding:16}}>
+          <div style={{background:"#0a0a1a",border:`1px solid #1e1e3a`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+            <div style={{color:"#818cf8",fontSize:12,lineHeight:1.6}}>Format: <strong style={{color:"#a5b4fc"}}>Eccentric → Pause (bottom) → Concentric → Pause (top)</strong><br/>Each digit = seconds. <strong style={{color:"#a5b4fc"}}>X</strong> = explosive. <strong style={{color:"#a5b4fc"}}>0</strong> = no pause.</div>
+          </div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+            {tempoGuide.map((t,i)=>(
+              <div key={i} style={{padding:"13px 14px",borderBottom:i<tempoGuide.length-1?`1px solid ${C.border}`:"none",display:"flex",gap:12,alignItems:"flex-start"}}>
+                <span style={{color:C.push,fontWeight:800,fontSize:13,fontFamily:"monospace",minWidth:60}}>{t.code}</span>
+                <span style={{color:C.muted,fontSize:12,lineHeight:1.5}}>{t.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {section==="rules"&&(
+        <div style={{padding:16}}>
+          {guidelines.map((g,i)=>(
+            <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${g.color}`,borderRadius:10,padding:"13px 16px",marginBottom:9}}>
+              <div style={{color:g.color,fontWeight:700,fontSize:13,marginBottom:5}}>{g.title}</div>
+              <div style={{color:C.muted,fontSize:13,lineHeight:1.6,whiteSpace:"pre-line"}}>{g.body}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WRIST VIEW ───────────────────────────────────────────────────────────────
+function WristView({activeVid,setActiveVid}){
+  const[dayIdx,setDayIdx]=useState(0);
+  const d=WRIST_DAYS[dayIdx];
+  return(
+    <div>
+      <div style={{padding:"16px 14px 12px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{color:C.wrist,fontSize:16,fontWeight:800,marginBottom:4}}>Wrist & Forearm</div>
+        <div style={{color:C.muted,fontSize:12,lineHeight:1.5,marginBottom:8}}>5 min every day, work or off. Weekday names are just labels: rotate through the 7 routines in order, one per day. Use the Sat routine before a swim and the Sun routine as the light one.</div>
+        <div style={{background:C.wrist+"10",border:`1px solid ${C.wrist}30`,borderRadius:8,padding:"10px 12px"}}>
+          <div style={{color:C.wrist,fontSize:11,fontWeight:700,marginBottom:4}}>📌 Two rules</div>
+          <div style={{color:"#e4b9d0",fontSize:12,lineHeight:1.6}}>1. Add load or hold time only when the minute starts feeling easy.<br/>2. Never push through joint pain — tendon irritation builds slowly.</div>
+        </div>
+      </div>
+      <div style={{display:"flex",overflowX:"auto",padding:"10px 12px",gap:6,borderBottom:`1px solid ${C.border}`,scrollbarWidth:"none"}}>
+        {WRIST_DAYS.map((d,i)=>(
+          <button key={i} onClick={()=>setDayIdx(i)}
+            style={{flexShrink:0,padding:"8px 10px",background:dayIdx===i?C.wrist+"20":C.card,border:`1px solid ${dayIdx===i?C.wrist+"60":C.border}`,borderRadius:8,cursor:"pointer",textAlign:"center"}}>
+            <div style={{color:dayIdx===i?C.wrist:C.muted,fontSize:11,fontWeight:800}}>{d.tag}</div>
+            <div style={{color:dayIdx===i?C.wrist+"aa":C.dim,fontSize:9,marginTop:1}}>{d.ringDay.split(" ")[0]}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{padding:14}}>
+        <div style={{color:C.wrist,fontSize:15,fontWeight:800,marginBottom:4}}>{d.day}</div>
+        <div style={{color:C.muted,fontSize:12,marginBottom:10}}>{d.ringDay}</div>
+        <div style={{background:"#140a10",border:`1px solid ${C.wrist}25`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+          <div style={{color:"#e4b9d0",fontSize:12,lineHeight:1.5}}>{d.note}</div>
+        </div>
+        {d.slots.map((slot,i)=>{
+          const vid=slot.vidKey?WV[slot.vidKey]:null;
+          return(
+            <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${slot.vidKey?C.wrist:C.dim}60`,borderRadius:9,padding:"12px 13px",marginBottom:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
+                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                  <span style={{width:20,height:20,borderRadius:"50%",background:C.wrist+"20",color:C.wrist,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</span>
+                  <span style={{color:C.text,fontSize:13,fontWeight:600,lineHeight:1.3}}>{slot.name}</span>
+                </div>
+                <span style={{color:C.wrist,fontSize:11,fontWeight:700,flexShrink:0}}>{slot.dur}</span>
+              </div>
+              <div style={{color:C.muted,fontSize:12,lineHeight:1.5,paddingLeft:27}}>{slot.detail}</div>
+              {vid&&<PlayButton vid={vid} activeVid={activeVid} setActiveVid={setActiveVid}/>}
+            </div>
+          );
+        })}
+        <div style={{background:"#0d1210",border:`1px solid #1a2e1a`,borderRadius:8,padding:"9px 12px",marginTop:4}}>
+          <div style={{color:"#86efac",fontSize:12}}>✓ Total: 5 min · {d.slots.filter(s=>s.vidKey).length} exercises with video</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEG VIEW ─────────────────────────────────────────────────────────────────
+function LegBlock({items,activeVid,setActiveVid}){
+  return(
+    <div>
+      {items.map((item,i)=>(
+        <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.legs}50`,borderRadius:9,padding:"12px 13px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:5}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <span style={{width:22,height:22,borderRadius:"50%",background:C.legs+"20",color:C.legs,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</span>
+              <span style={{color:C.text,fontSize:13,fontWeight:600,lineHeight:1.3}}>{item.name}</span>
+            </div>
+            <span style={{color:C.legs,fontSize:11,fontWeight:700,flexShrink:0,textAlign:"right"}}>{item.sets}</span>
+          </div>
+          <div style={{color:C.muted,fontSize:12,lineHeight:1.5,paddingLeft:29}}>{item.detail}</div>
+          {item.vidKey&&<PlayButton vid={LV[item.vidKey]} activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LegsView({activeVid,setActiveVid}){
+  const[sub,setSub]=useState("main");
+  const[progOpen,setProgOpen]=useState(false);
+  const[evidOpen,setEvidOpen]=useState(false);
+  return(
+    <div>
+      <div style={{padding:"16px 14px 12px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+          <span style={{background:C.legs,color:"#000",fontSize:10,fontWeight:800,letterSpacing:1.2,padding:"2px 8px",borderRadius:4}}>LEGS</span>
+          <span style={{color:C.muted,fontSize:13}}>Any off day</span>
+        </div>
+        <div style={{color:C.legs,fontSize:16,fontWeight:800,marginBottom:4}}>Leg Day — Flexible Flatfoot Protocol</div>
+        <div style={{color:C.muted,fontSize:12,marginBottom:10}}>Foot strength · Hip strength · Single-leg control · Pistol progression</div>
+        <div style={{background:"#0a100a",border:`1px solid ${C.legs}30`,borderRadius:9,padding:"11px 13px",marginBottom:10}}>
+          <div style={{color:C.legs,fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>📅 When to schedule it</div>
+          <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.6}}>Leg soreness peaks 24–72 h after a session, and a 12-hour shift on your feet makes it costly. Do legs on day 1 of an off run of 2+ days, at most once per 7 days, never the day before a shift. Start with half the sets for your first two leg days.</div>
+        </div>
+        <button onClick={()=>setEvidOpen(v=>!v)}
+          style={{background:"#0a0a1a",border:`1px solid #1e1e3a`,borderRadius:8,padding:"9px 12px",width:"100%",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:C.vid,fontSize:11,fontWeight:700}}>📚 Evidence Base ({LEG_EVIDENCE.length} sources)</span>
+          <span style={{color:C.muted,fontSize:16}}>{evidOpen?"−":"+"}</span>
+        </button>
+        {evidOpen&&(
+          <div style={{marginTop:8}}>
+            {LEG_EVIDENCE.map((e,i)=>(
+              <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",marginBottom:6}}>
+                <div style={{color:"#9ca3af",fontSize:11,lineHeight:1.5}}>{e}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`}}>
+        <button onClick={()=>setSub("main")} style={{flex:1,padding:"11px 8px",background:"none",border:"none",borderBottom:sub==="main"?`2px solid ${C.legs}`:"2px solid transparent",color:sub==="main"?C.text:C.muted,fontSize:13,fontWeight:sub==="main"?700:400,cursor:"pointer"}}>🟢 Main Day (~65 min)</button>
+        <button onClick={()=>setSub("control")} style={{flex:1,padding:"11px 8px",background:"none",border:"none",borderBottom:sub==="control"?`2px solid ${C.legs}`:"2px solid transparent",color:sub==="control"?C.text:C.muted,fontSize:13,fontWeight:sub==="control"?700:400,cursor:"pointer"}}>🔵 Control Day (~35 min)</button>
+      </div>
+      <div style={{padding:14}}>
+        {sub==="main"&&(
+          <div>
+            <div style={{background:"#0a100a",border:`1px solid ${C.legs}25`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+              <div style={{color:C.legs,fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:3}}>Session Note</div>
+              <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>Do this on day 1 of an off run of 2+ days. Add the control day only after 4+ weeks, on an off day that is not right before a shift.</div>
+            </div>
+            <div style={{color:C.legs,fontSize:10,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:8}}>Warm-up (8–10 min)</div>
+            <LegBlock items={LEG_WARMUP} activeVid={activeVid} setActiveVid={setActiveVid}/>
+            <div style={{height:8}}/>
+            <div style={{color:C.push,fontSize:10,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:8}}>Strength Block</div>
+            <LegBlock items={LEG_STRENGTH} activeVid={activeVid} setActiveVid={setActiveVid}/>
+            <div style={{height:8}}/>
+            <div style={{color:C.legs,fontSize:10,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:8}}>Finisher (3–5 min)</div>
+            <LegBlock items={LEG_FINISHER} activeVid={activeVid} setActiveVid={setActiveVid}/>
+            <div style={{marginTop:14}}>
+              <button onClick={()=>setProgOpen(v=>!v)}
+                style={{background:"#110d00",border:`1px solid #2a1f00`,borderRadius:10,padding:"12px 14px",width:"100%",textAlign:"left",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.push,fontSize:12,fontWeight:700}}>🏋️ Pistol Squat Progression — 5 Levels</span>
+                <span style={{color:C.muted,fontSize:16}}>{progOpen?"−":"+"}</span>
+              </button>
+              {progOpen&&(
+                <div style={{marginTop:8}}>
+                  {PISTOL_PROGRESSION.map((p,i)=>(
+                    <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:9,padding:"11px 13px",marginBottom:7,display:"flex",gap:10}}>
+                      <span style={{width:22,height:22,borderRadius:"50%",background:C.push+"20",color:C.push,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{p.step}</span>
+                      <div>
+                        <div style={{color:C.text,fontSize:13,fontWeight:600,marginBottom:3}}>{p.label}</div>
+                        <div style={{color:C.muted,fontSize:12,lineHeight:1.5}}>{p.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{background:"#151500",border:`1px solid #2f2e00`,borderRadius:9,padding:"11px 13px",marginTop:6}}>
+                    <div style={{color:C.note,fontSize:11,fontWeight:700,marginBottom:6}}>⚠️ Safety Cues</div>
+                    {TECH_CUES.map((c,i)=>(
+                      <div key={i} style={{color:"#d4c44a",fontSize:12,lineHeight:1.5,marginBottom:4}}>• {c}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        {sub==="control"&&(
+          <div>
+            <div style={{background:"#0a0a1a",border:`1px solid #1e1e3a`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+              <div style={{color:C.vid,fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:3}}>Control Day Note</div>
+              <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>Technical day only — lighter than main day. Add this only after 4+ weeks on the main-day plan, and not on the day before a shift.</div>
+            </div>
+            <LegBlock items={LEG_CONTROL_DAY} activeVid={activeVid} setActiveVid={setActiveVid}/>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SWIM COMPONENTS ──────────────────────────────────────────────────────────
+function SwimBlock({title,items,color}){
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{color:C.muted,fontSize:10,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>{title}
+      </div>
+      {items.map((item,i)=>(
+        <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${color}50`,borderRadius:9,padding:"12px 13px",marginBottom:7}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:5}}>
+            <span style={{color:C.text,fontSize:13,fontWeight:600,lineHeight:1.3}}>{item.name}</span>
+            {item.reps&&<span style={{color,fontSize:11,fontWeight:700,flexShrink:0,textAlign:"right"}}>{item.reps}</span>}
+          </div>
+          {item.equip&&<div style={{background:C.vid+"15",borderRadius:4,padding:"2px 8px",display:"inline-block",marginBottom:5}}><span style={{color:C.vid,fontSize:10,fontWeight:700}}>🎽 {item.equip}</span></div>}
+          {item.note&&<div style={{color:C.muted,fontSize:12,lineHeight:1.5,marginTop:4}}>{item.note}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SwimSession({session,phaseColor}){
+  if(!session) return(
+    <div style={{padding:16}}>
+      <div style={{background:"#110800",border:`1px solid #2a1800`,borderRadius:12,padding:16,textAlign:"center"}}>
+        <div style={{color:C.warn,fontSize:13,fontWeight:700,marginBottom:6}}>No light swim in Visit 1</div>
+        <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.6}}>In Visit 1, swim on Day 1 and Day 3 and rest on Day 2. A day between sessions helps shoulders and technique consolidate.</div>
+      </div>
+    </div>
+  );
+  return(
+    <div style={{padding:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:9,padding:"10px 11px"}}>
+          <div style={{color:C.muted,fontSize:9,letterSpacing:1.2,textTransform:"uppercase",marginBottom:3}}>Duration</div>
+          <div style={{color:C.text,fontSize:12,fontWeight:600}}>{session.duration}</div>
+        </div>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:9,padding:"10px 11px"}}>
+          <div style={{color:C.muted,fontSize:9,letterSpacing:1.2,textTransform:"uppercase",marginBottom:3}}>Volume</div>
+          <div style={{color:C.text,fontSize:12,fontWeight:600}}>{session.volume}</div>
+        </div>
+      </div>
+      {session.note&&<div style={{background:"#0a0a1a",border:`1px solid #1e1e3a`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{color:C.vid,fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>ℹ️ Session Note</div>
+        <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>{session.note}</div>
+      </div>}
+      {session.equipment&&<div style={{background:"#0e0a1a",border:`1px solid ${C.vid}25`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{color:C.vid,fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>🎽 Equipment</div>
+        <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>{session.equipment}</div>
+      </div>}
+      {session.progression&&<div style={{background:"#0d1a0d",border:`1px solid #1a2e1a`,borderRadius:9,padding:"10px 12px",marginBottom:14}}>
+        <div style={{color:"#86efac",fontSize:10,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>📈 Weekly Progression</div>
+        <div style={{color:"#86efac",fontSize:12,lineHeight:1.5}}>{session.progression}</div>
+      </div>}
+      <SwimBlock title="Warm-up" items={session.warmup} color={phaseColor}/>
+      {session.drills&&session.drills.length>0&&<SwimBlock title="Drill Set" items={session.drills} color={C.pull}/>}
+      <SwimBlock title="Main Set" items={session.mainSet} color={C.push}/>
+      {session.breaststroke&&session.breaststroke.length>0&&<SwimBlock title="Breaststroke Work" items={session.breaststroke} color="#e879f9"/>}
+      <SwimBlock title="Cool-down" items={session.cooldown} color={C.swim}/>
+      <div style={{background:"#151500",border:`1px solid #2f2e00`,borderRadius:9,padding:"12px 13px",marginTop:6}}>
+        <div style={{color:C.note,fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>🏊 Coach Note</div>
+        <div style={{color:"#d4c44a",fontSize:12,lineHeight:1.6}}>{session.coachNote}</div>
+      </div>
+    </div>
+  );
+}
+
+function SwimPhaseView(){
+  const[phase,setPhase]=useState(0);
+  const[session,setSession]=useState("sat");
+  const p=swimPhases[phase];
+  return(
+    <div>
+      <div style={{display:"flex",gap:6,padding:"14px 14px 0",marginBottom:14}}>
+        {swimPhases.map((ph,i)=>(
+          <button key={i} onClick={()=>{setPhase(i);setSession("sat");}}
+            style={{flex:1,padding:"10px 4px",cursor:"pointer",textAlign:"center",background:phase===i?C.swim+"20":C.card,border:`1px solid ${phase===i?C.swim+"60":C.border}`,borderRadius:9}}>
+            <div style={{color:phase===i?C.swim:C.muted,fontSize:11,fontWeight:800,marginBottom:2}}>{ph.label}</div>
+            <div style={{color:phase===i?C.swim+"aa":C.dim,fontSize:9}}>{ph.weeks}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{padding:"0 14px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{color:C.swim,fontSize:16,fontWeight:800,marginBottom:4}}>{p.title}</div>
+        <div style={{background:"#0d1a14",border:`1px solid #1a3020`,borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+          <div style={{color:"#86efac",fontSize:12,lineHeight:1.5}}>{p.overview}</div>
+        </div>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 11px",marginBottom:8}}>
+          <div style={{color:C.muted,fontSize:10,letterSpacing:1,textTransform:"uppercase",marginBottom:3}}>Key metric</div>
+          <div style={{color:C.swim,fontSize:12,fontWeight:700}}>{p.keyMetric}</div>
+        </div>
+        <div style={{background:"#0a0a1a",border:`1px solid #1a1a30`,borderRadius:8,padding:"8px 11px"}}>
+          <div style={{color:C.vid+"90",fontSize:10,lineHeight:1.5}}>📚 {p.sources}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`}}>
+        <button onClick={()=>setSession("sat")} style={{flex:1,padding:"11px 8px",background:"none",border:"none",borderBottom:session==="sat"?`2px solid ${C.sat}`:"2px solid transparent",color:session==="sat"?C.text:C.muted,fontSize:13,fontWeight:session==="sat"?700:400,cursor:"pointer"}}>🟢 Main (Day 1 & 3)</button>
+        <button onClick={()=>setSession("wed")} style={{flex:1,padding:"11px 8px",background:"none",border:"none",borderBottom:session==="wed"?`2px solid ${C.wed}`:"2px solid transparent",color:session==="wed"?C.text:C.muted,fontSize:13,fontWeight:session==="wed"?700:400,cursor:"pointer"}}>{p.wedAvailable?"🔵 Light (Day 2)":"🔵 Day 2 (rest)"}</button>
+      </div>
+      <SwimSession session={session==="sat"?p.sat:p.wed} phaseColor={p.color}/>
+    </div>
+  );
+}
+
+// ─── VIDEOS TAB ───────────────────────────────────────────────────────────────
+function AllVideosView({activeVid,setActiveVid}){
+  const warmupVids=warmupSteps.flatMap(step=>step.videos.map(v=>({vid:v,stepName:step.name,stepN:step.n})));
+  const groups=[
+    { label:"📐 Ring Setup", color:C.vid, items:[{vid:RING_HEIGHT_VIDEO}] },
+    { label:"🔥 Warm-up — 6 steps", color:C.push, items:warmupVids },
+    { label:"🟡 Push 1 (original split)", color:C.push, items:sessions.push1.exercises.filter(e=>e.vid) },
+    { label:"🔵 Pull 1 (original split)", color:C.pull, items:sessions.pull1.exercises.filter(e=>e.vid) },
+    { label:"🟡 Push 2 (original split)", color:C.push, items:sessions.push2.exercises.filter(e=>e.vid) },
+    { label:"🔵 Pull 2 (original split)", color:C.pull, items:sessions.pull2.exercises.filter(e=>e.vid) },
+    { label:"🟢 Legs", color:C.legs, items:Object.entries(LV).map(([k,v])=>({vid:v})) },
+    { label:"💪 Wrist / Forearm", color:C.wrist, items:Object.entries(WV).map(([k,v])=>({vid:v})) },
+  ];
+  const total=groups.reduce((n,g)=>n+g.items.length,0);
+  return(
+    <div style={{padding:16}}>
+      <div style={{background:"#0e0a1a",border:`1px solid ${C.vid}25`,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+        <div style={{color:C.vid,fontWeight:800,fontSize:12,marginBottom:4}}>{total} Videos — tap ▶ to play inline</div>
+        <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.6}}>Warm-up steps 1, 2, 5, 6 stream from GitHub (play via video tag). Steps 3 & 4 play from YouTube at exact chapter timestamps. All ring, leg, and wrist videos play from YouTube.</div>
+      </div>
+      {groups.map((g,gi)=>(
+        <div key={gi} style={{marginBottom:20}}>
+          <div style={{color:g.color,fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>{g.label}</div>
+          {g.items.map((item,i)=>{
+            const v=item.vid;
+            if(!v) return null;
+            const isGitHub=v.type==="github";
+            const hasTimestamp=!!v.start;
+            return(
+              <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${g.color}55`,borderRadius:9,padding:"12px 13px",marginBottom:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
+                  <div style={{color:C.text,fontSize:13,fontWeight:600,lineHeight:1.3,flex:1,paddingRight:8}}>{item.stepN?`Step ${item.stepN}: `:""}{v.label}</div>
+                  {isGitHub&&<span style={{background:C.core+"20",color:C.core,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,flexShrink:0}}>GITHUB</span>}
+                  {hasTimestamp&&<span style={{background:C.vid+"20",color:C.vid,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,flexShrink:0}}>⏱ {Math.floor(v.start/60)}:{String(v.start%60).padStart(2,"0")}</span>}
+                </div>
+                <div style={{color:C.muted,fontSize:11,marginBottom:0}}>{isGitHub?"GitHub · streams inline":v.source||"YouTube"}</div>
+                <PlayButton vid={v} activeVid={activeVid} setActiveVid={setActiveVid}/>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── SCHEDULE VIEW ────────────────────────────────────────────────────────────
+function ScheduleView({onNav,activeVid,setActiveVid}){
+  return(
+    <div style={{padding:16}}>
+      <div style={{marginBottom:20}}>
+        <div style={{color:C.muted,fontSize:10,letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>Weekly Schedule</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+          {weekDays.map(w=>(
+            <div key={w.d} onClick={()=>w.key&&onNav(w.key)} style={{textAlign:"center",cursor:w.key?"pointer":"default"}}>
+              <div style={{color:C.muted,fontSize:9,fontWeight:700,letterSpacing:1,marginBottom:5,textTransform:"uppercase"}}>{w.d}</div>
+              <div style={{background:typeColor(w.type)+"15",border:`1px solid ${typeColor(w.type)}35`,borderRadius:8,padding:"7px 2px"}}>
+                <div style={{color:typeColor(w.type),fontSize:8,fontWeight:800,textTransform:"uppercase",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{w.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:8,color:C.dim,fontSize:11,lineHeight:1.5}}>Sat = primary swim · Sun = optional legs · Wrist: 5 min after every session</div>
+      </div>
+      <div style={{background:"#110d00",border:`1px solid #2a1f00`,borderRadius:12,padding:"14px 16px",marginBottom:10}}>
+        <div style={{color:C.push,fontSize:11,fontWeight:800,letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>Ring Plan — Phase 1 · Weeks 1–5</div>
+        <div style={{color:"#9ca3af",fontSize:13,lineHeight:1.6}}>Push/pull split on rings. 5 weeks, then a deload week, then Phase 2. Swim runs its own 12-week track. Legs and Wrist run year-round.</div>
+      </div>
+      <div style={{background:"#0f0a06",border:`1px solid ${C.core}35`,borderRadius:12,padding:"13px 15px",marginBottom:10}}>
+        <div style={{color:C.core,fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>➕ Add Every Day</div>
+        <div style={{color:"#fdba74",fontSize:13,fontWeight:600,marginBottom:3}}>Hollow Body Hold — 2×20–30s</div>
+        <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>Closes the only core gap in your ring plan. Directly mirrors your freestyle streamline.</div>
+      </div>
+      <div onClick={()=>onNav("wrist")} style={{background:C.wrist+"10",border:`1px solid ${C.wrist}30`,borderRadius:12,padding:"13px 15px",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{color:C.wrist,fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>💪 Wrist / Forearm — 5 min Daily</div>
+          <div style={{color:"#e4b9d0",fontSize:12,lineHeight:1.5}}>7 daily protocols · 7 verified video demos · Year-round</div>
+        </div>
+        <span style={{color:C.wrist,fontSize:18}}>›</span>
+      </div>
+      <div onClick={()=>onNav("legs")} style={{background:C.legs+"08",border:`1px solid ${C.legs}30`,borderRadius:12,padding:"13px 15px",marginBottom:10,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{color:C.legs,fontSize:11,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",marginBottom:4}}>🦵 Legs — Sunday (optional)</div>
+          <div style={{color:"#9ca3af",fontSize:12,lineHeight:1.5}}>Flatfoot protocol · Pistol progression · 15 exercises · 15 videos</div>
+        </div>
+        <span style={{color:C.legs,fontSize:18}}>›</span>
+      </div>
+      <RingHeightBanner activeVid={activeVid} setActiveVid={setActiveVid}/>
+      {["push1","pull1","push2","pull2"].map(key=>{
+        const s=sessions[key];
+        return(
+          <div key={key} onClick={()=>onNav(key)}
+            style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${s.color}`,borderRadius:10,padding:"14px 16px",marginBottom:9,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                <span style={{color:s.color,fontWeight:800,fontSize:14}}>{s.tag}</span>
+                <span style={{color:C.muted,fontSize:12}}>{s.day}</span>
+                <span style={{background:C.vid+"15",color:C.vid,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4}}>▶ {s.exercises.filter(e=>e.vid).length}</span>
+                <span style={{background:C.wrist+"15",color:C.wrist,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4}}>💪 5min</span>
+              </div>
+              <div style={{color:C.muted,fontSize:12,marginBottom:2}}>{s.focus}</div>
+              <div style={{color:C.dim,fontSize:11}}>{s.exercises.length} exercises · 2 sets · {s.duration}</div>
+            </div>
+            <span style={{color:C.dim,fontSize:18}}>›</span>
+          </div>
+        );
+      })}
+      <div onClick={()=>onNav("swim")} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.swim}`,borderRadius:10,padding:"14px 16px",marginBottom:9,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+            <span style={{color:C.swim,fontWeight:800,fontSize:14}}>SWIM</span>
+            <span style={{color:C.muted,fontSize:12}}>Sat (+ Wed from Wk 5)</span>
+            <span style={{background:C.swim+"15",color:C.swim,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4}}>12 WEEKS</span>
+          </div>
+          <div style={{color:C.muted,fontSize:12,marginBottom:2}}>Body position · EVF catch · Aerobic build</div>
+          <div style={{color:C.dim,fontSize:11}}>3 phases · 20m pool · Snorkel + fins</div>
+        </div>
+        <span style={{color:C.dim,fontSize:18}}>›</span>
+      </div>
+      <div onClick={()=>onNav("legs")} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.legs}`,borderRadius:10,padding:"14px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+            <span style={{color:C.legs,fontWeight:800,fontSize:14}}>LEGS</span>
+            <span style={{color:C.muted,fontSize:12}}>Sunday</span>
+            <span style={{background:C.legs+"15",color:C.legs,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4}}>▶ 15 VIDEOS</span>
+          </div>
+          <div style={{color:C.muted,fontSize:12,marginBottom:2}}>Flatfoot · Hip strength · Pistol progression</div>
+          <div style={{color:C.dim,fontSize:11}}>Evidence-based · Main day + optional control day</div>
+        </div>
+        <span style={{color:C.dim,fontSize:18}}>›</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+function App(){
+  const[tab,setTab]=useState("plan");
+  const[activeVid,setActiveVid]=useState(null);
+  const tabs=[
+    {id:"plan",label:"📅 Plan"},{id:"ringA",label:"Ring A"},{id:"ringB",label:"Ring B"},
+    
+    
+    
+    
+    {id:"swim",label:"🏊 Swim"},
+    {id:"legs",label:"🦵 Legs"},
+    {id:"wrist",label:"💪 Wrist"},
+    {id:"videos",label:"▶ Videos"},
+    {id:"guide",label:"Guide"},
+  ];
+  const ringTabs=["push1","pull1","push2","pull2"];
+  function accentFor(id){
+    if(id==="videos") return C.vid;
+    if(id==="wrist") return C.wrist;
+    if(id==="legs") return C.legs;
+    if(id==="swim"||id==="schedule") return C.swim;
+    return C.push;
+  }
+  return(
+    <div style={{background:C.bg,minHeight:"100vh",color:C.text,fontFamily:"-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif",maxWidth:500,margin:"0 auto"}}>
+      <div style={{padding:"20px 16px 14px",borderBottom:`1px solid ${C.border}`,background:"#0b0b0b"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontSize:10,color:C.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:3}}>Rings · Swim · Legs · Wrist</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.text,letterSpacing:-0.5}}>Training Plan</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{color:C.push,fontSize:11,fontWeight:700}}>RINGS P1</div>
+            <div style={{color:C.swim,fontSize:11,fontWeight:700}}>SWIM MONTHLY</div>
+          </div>
+        </div>
+        <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:6}}>
+          <Pill color={C.push}>ring A/B</Pill>
+          <Pill color={C.swim}>swim monthly</Pill>
+          <Pill color={C.legs}>legs</Pill>
+          <Pill color={C.wrist}>wrist daily</Pill>
+          <Pill color={C.vid}>50 videos</Pill>
+        </div>
+      </div>
+      <div style={{display:"flex",overflowX:"auto",background:"#0b0b0b",borderBottom:`1px solid ${C.border}`,scrollbarWidth:"none"}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{
+            padding:"11px 10px",background:"none",border:"none",
+            borderBottom:tab===t.id?`2px solid ${accentFor(t.id)}`:"2px solid transparent",
+            color:tab===t.id?(["videos","wrist","legs"].includes(t.id)?accentFor(t.id):C.text):(["videos","wrist","legs"].includes(t.id)?accentFor(t.id)+"70":C.muted),
+            fontSize:12,fontWeight:tab===t.id?700:400,cursor:"pointer",whiteSpace:"nowrap",transition:"color 0.15s"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div>
+        {tab==="plan"&&<PlanView onNav={setTab}/>}{(tab==="ringA"||tab==="ringB")&&<RingFullView which={tab} activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        {ringTabs.includes(tab)&&<SessionView sk={tab} activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        {tab==="swim"&&<SwimPhaseView/>}
+        {tab==="legs"&&<LegsView activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        {tab==="wrist"&&<WristView activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        {tab==="videos"&&<AllVideosView activeVid={activeVid} setActiveVid={setActiveVid}/>}
+        {tab==="guide"&&<GuideView activeVid={activeVid} setActiveVid={setActiveVid}/>}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
